@@ -1349,23 +1349,36 @@ function greatCirclePoints(lat1, lon1, lat2, lon2, n = 120) {
   return pts;
 }
 
-// Fetch latest RainViewer satellite timestamp and add cloud layer
+// Fetch latest RainViewer satellite/radar and add weather overlay
 async function addCloudLayer(map) {
   try {
-    const r = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-cache' });
-    if (!r.ok) return;
+    const r = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    if (!r.ok) throw new Error('API ' + r.status);
     const data = await r.json();
     const host = data.host || 'https://tilecache.rainviewer.com';
-    const frames = data.satellite?.infrared;
-    if (!frames?.length) return;
-    const latest = frames[frames.length - 1];
-    L.tileLayer(`${host}${latest.path}/256/{z}/{x}/{y}/0/0_1.png`, {
-      opacity: 0.55,
-      attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>',
-      tileSize: 256
-    }).addTo(map);
+
+    // 1. Try satellite infrared — use .time field directly (most reliable URL form)
+    const satFrames = data.satellite?.infrared;
+    if (satFrames?.length) {
+      const ts = satFrames[satFrames.length - 1].time;
+      L.tileLayer(
+        `${host}/v2/satellite/infrared/${ts}/256/{z}/{x}/{y}/0/0_1.png`,
+        { opacity: 0.65, tileSize: 256, attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>' }
+      ).addTo(map);
+      return;
+    }
+
+    // 2. Fallback: radar precipitation (shows weather-bearing clouds in colour)
+    const radFrames = data.radar?.past;
+    if (radFrames?.length) {
+      const ts = radFrames[radFrames.length - 1].time;
+      L.tileLayer(
+        `${host}/v2/radar/${ts}/256/{z}/{x}/{y}/2/1_1.png`,
+        { opacity: 0.5, tileSize: 256, attribution: '🌧️ <a href="https://rainviewer.com">RainViewer</a>' }
+      ).addTo(map);
+    }
   } catch(e) {
-    console.warn('Cloud layer unavailable:', e);
+    console.warn('Weather overlay unavailable:', e);
   }
 }
 

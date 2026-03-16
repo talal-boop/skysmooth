@@ -469,6 +469,16 @@
     .badge-none .nt { font-size: 1.2rem; font-weight: 800; margin-bottom: 8px; }
     .badge-none .nd { font-size: 0.85rem; color: var(--text2); line-height: 1.6; }
 
+    .outlier-note {
+      font-size: 0.78rem;
+      color: #ffab40;
+      background: rgba(255,109,0,0.08);
+      border: 1px solid rgba(255,109,0,0.22);
+      border-radius: 20px;
+      padding: 5px 14px;
+      margin-bottom: 12px;
+    }
+
     .route-meta {
       color: var(--text2);
       font-size: 0.85rem;
@@ -1034,17 +1044,32 @@ async function checkTurbulence() {
       .filter(p => worstOfPirep(p) >= 0)
       .sort((a, b) => worstOfPirep(b) - worstOfPirep(a));
 
-    // Worst level from reports in the last 60 minutes only (for the badge)
+    // Badge level: last 60 min, highest level with ≥ 2 reports
+    // Single outlier reports don't drive the badge when there are many others
     const ONE_HOUR = 60 * 60 * 1000;
     const recentTurbPireps = turbPireps.filter(p => {
       const d = typeof p.obsTime === 'number' ? new Date(p.obsTime * 1000) : new Date(p.obsTime);
       return (Date.now() - d) < ONE_HOUR;
     });
-    // Fall back to all reports if nothing recent
     const badgePireps = recentTurbPireps.length > 0 ? recentTurbPireps : turbPireps;
-    const worst = badgePireps.length > 0
-      ? Math.max(...badgePireps.map(worstOfPirep))
-      : -1;
+
+    // Count how many reports at each level
+    const lvlCounts = new Array(5).fill(0);
+    badgePireps.forEach(p => { const l = worstOfPirep(p); if (l >= 0) lvlCounts[l]++; });
+
+    let worst = -1, outlier = -1;
+    if (badgePireps.length <= 3) {
+      // Too few reports to apply majority rule — just use worst
+      worst = badgePireps.length > 0 ? Math.max(...badgePireps.map(worstOfPirep)) : -1;
+    } else {
+      // Find highest level with ≥ 2 reports
+      for (let i = 4; i >= 0; i--) {
+        if (lvlCounts[i] >= 2) { worst = i; break; }
+        if (lvlCounts[i] === 1 && outlier < 0) outlier = i; // single higher report
+      }
+      if (worst < 0) worst = outlier; // all levels have only 1 report each
+      else if (outlier <= worst) outlier = -1; // outlier not higher than badge level
+    }
 
     // Filter turbulence SIGMETs
     const turbSigmets = allSigmets.filter(s => {
@@ -1055,7 +1080,7 @@ async function checkTurbulence() {
 
     step('ps3','done');
 
-    render(dep, dest, worst, turbPireps, allPireps.length, turbSigmets);
+    render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets);
 
   } catch (e) {
     showErr(`Could not fetch weather data: ${e.message}`);
@@ -1070,15 +1095,15 @@ async function checkTurbulence() {
 /* ─────────────────────────────────────────────────
    Rendering
 ───────────────────────────────────────────────── */
-function render(dep, dest, worst, turbPireps, totalPireps, turbSigmets) {
-  renderRating(dep, dest, worst, turbPireps.length, totalPireps);
+function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets) {
+  renderRating(dep, dest, worst, outlier, turbPireps.length, totalPireps);
   renderPireps(turbPireps);
   renderSigmets(turbSigmets);
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function renderRating(dep, dest, worst, turbCount, totalCount) {
+function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
   const wrap = document.getElementById('ratingWrap');
 
   if (worst < 0) {
@@ -1096,11 +1121,15 @@ function renderRating(dep, dest, worst, turbCount, totalCount) {
   }
 
   const lvl = LEVELS[worst];
+  const outlierNote = (outlier > worst && outlier >= 0)
+    ? `<div class="outlier-note">⚠️ 1 isolated ${LEVELS[outlier].name} report in last 60 min — see list below</div>`
+    : '';
   wrap.innerHTML = `
     <div class="rating-badge ${lvl.cls}">
       <div class="ri">${lvl.icon}</div>
       <div class="rl">${lvl.name} Turbulence</div>
     </div>
+    ${outlierNote}
     <div class="route-meta">
       <strong>${dep} → ${dest}</strong>
       &nbsp;·&nbsp; <strong>${turbCount}</strong> PIREP${turbCount!==1?'s':''}

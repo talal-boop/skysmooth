@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkySmooth — Turbulence Checker</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SkySmooth">
+  <meta name="theme-color" content="#060e1a">
+  <style>
+    :root {
+      --bg0: #03080f;
+      --bg1: #07111f;
+      --bg2: #0b1a31;
+      --bg3: #0f2244;
+      --border: #162e56;
+      --border2: #1e3f78;
+      --text1: #e8f1ff;
+      --text2: #8db4de;
+      --text3: #4a7ab0;
+      --accent: #3d9bff;
+      --accent2: #1a72d8;
+
+      --c-smooth:   #00e676; --cg-smooth:   rgba(0,200,83,0.18);   --cb-smooth:   rgba(0,200,83,0.08);
+      --c-light:    #64b5f6; --cg-light:    rgba(33,150,243,0.18);  --cb-light:    rgba(33,150,243,0.08);
+      --c-moderate: #ffe57f; --cg-moderate: rgba(255,214,0,0.18);   --cb-moderate: rgba(255,214,0,0.08);
+      --c-severe:   #ffab40; --cg-severe:   rgba(255,109,0,0.18);   --cb-severe:   rgba(255,109,0,0.08);
+      --c-extreme:  #ff5252; --cg-extreme:  rgba(213,0,0,0.18);     --cb-extreme:  rgba(213,0,0,0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg0);
+      color: var(--text1);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Star canvas ── */
+    #stars {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    }
+
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 20px 60px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 52px 0 36px;
+    }
+
+    .logo-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .logo-plane {
+      font-size: 2.8rem;
+      filter: drop-shadow(0 0 18px rgba(61,155,255,0.7));
+      animation: hover-plane 3s ease-in-out infinite;
+    }
+
+    @keyframes hover-plane {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      background: linear-gradient(130deg, #fff 0%, #7ec8ff 50%, #3d9bff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      color: var(--text2);
+      font-size: 0.95rem;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Search card ── */
+    .search-card {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 28px 28px 22px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(61,155,255,0.05);
+    }
+
+    .inputs-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .input-grp { flex: 1; }
+
+    label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 7px;
+    }
+
+    .inp-wrap { position: relative; }
+
+    .inp-icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.05rem;
+      pointer-events: none;
+      user-select: none;
+      z-index: 1;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 13px 13px 13px 42px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      color: var(--text1);
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      background: rgba(61,155,255,0.07);
+      box-shadow: 0 0 0 3px rgba(61,155,255,0.18);
+    }
+
+    input::placeholder { color: rgba(141,180,222,0.3); letter-spacing: 0; font-weight: 400; }
+
+    /* ── Autocomplete dropdown ── */
+    .ac-drop {
+      position: absolute;
+      top: calc(100% + 3px);
+      left: 0; right: 0;
+      z-index: 300;
+      background: #091729;
+      border: 1px solid #2a4a7f;
+      border-radius: 10px;
+      max-height: 290px;
+      overflow-y: auto;
+      display: none;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+    }
+    .ac-drop.open { display: block; }
+    .ac-item {
+      padding: 9px 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.focused { background: rgba(61,155,255,0.15); }
+    .ac-code {
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #60a5fa;
+      min-width: 44px;
+      letter-spacing: 1px;
+    }
+    .ac-iata { font-size: 0.74rem; color: #64748b; min-width: 26px; letter-spacing: 0; text-transform: none; }
+    .ac-info { flex: 1; min-width: 0; }
+    .ac-name { color: #e2e8f0; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0; text-transform: none; font-weight: 400; }
+    .ac-loc  { color: #64748b; font-size: 0.75rem; letter-spacing: 0; text-transform: none; }
+
+    .arrow {
+      font-size: 1.4rem;
+      color: var(--accent);
+      padding-bottom: 2px;
+      opacity: 0.6;
+      flex-shrink: 0;
+    }
+
+    .btn-check {
+      padding: 13px 28px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(61,155,255,0.35);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-check:hover  { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(61,155,255,0.5); }
+    .btn-check:active { transform: translateY(0); }
+    .btn-check:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── Quick routes ── */
+    .quick-routes {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ql { font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
+
+    .rbtn {
+      padding: 5px 13px;
+      background: rgba(61,155,255,0.07);
+      border: 1px solid rgba(61,155,255,0.22);
+      border-radius: 20px;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.4px;
+    }
+    .rbtn:hover { background: rgba(61,155,255,0.16); border-color: var(--accent); transform: translateY(-1px); }
+
+    /* ── Loading ── */
+    .loading-bar {
+      display: none;
+      text-align: center;
+      padding: 14px;
+      color: var(--text2);
+      font-size: 0.88rem;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-bar.show { display: flex; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(61,155,255,0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-steps {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+    .pstep { color: var(--text3); transition: color 0.3s; }
+    .pstep.done { color: #00e676; }
+    .pstep.active { color: var(--accent); }
+
+    /* ── Error ── */
+    .err {
+      display: none;
+      background: rgba(213,0,0,0.09);
+      border: 1px solid rgba(213,0,0,0.28);
+      border-left: 3px solid #D50000;
+      border-radius: 12px;
+      padding: 14px 18px;
+      color: #ff7070;
+      font-size: 0.88rem;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .err.show { display: block; }
+
+    /* ── Results ── */
+    #results { display: none; }
+
+    /* ── Rating badge ── */
+    .rating-wrap {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+
+    .rating-badge {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 36px 72px;
+      border-radius: 22px;
+      border: 2px solid;
+      margin-bottom: 14px;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.3s;
+    }
+    .rating-badge::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .ri { font-size: 3.8rem; margin-bottom: 10px; filter: drop-shadow(0 0 20px currentColor); }
+    .rl { font-size: 2.2rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+    .rd { font-size: 0.88rem; opacity: 0.75; max-width: 300px; line-height: 1.5; }
+
+    .badge-smooth   { background: var(--cb-smooth);   border-color: #00c853; color: var(--c-smooth);   box-shadow: 0 0 50px rgba(0,200,83,0.2),   inset 0 0 50px rgba(0,200,83,0.04); }
+    .badge-light    { background: var(--cb-light);    border-color: #2196F3; color: var(--c-light);    box-shadow: 0 0 50px rgba(33,150,243,0.2),  inset 0 0 50px rgba(33,150,243,0.04); }
+    .badge-moderate { background: var(--cb-moderate); border-color: #FFD600; color: var(--c-moderate); box-shadow: 0 0 50px rgba(255,214,0,0.2),   inset 0 0 50px rgba(255,214,0,0.04); }
+    .badge-severe   { background: var(--cb-severe);   border-color: #FF6D00; color: var(--c-severe);   box-shadow: 0 0 50px rgba(255,109,0,0.2),   inset 0 0 50px rgba(255,109,0,0.04); }
+    .badge-extreme  { background: var(--cb-extreme);  border-color: #D50000; color: var(--c-extreme);  box-shadow: 0 0 50px rgba(213,0,0,0.3),     inset 0 0 50px rgba(213,0,0,0.06);
+                      animation: pulse-ext 2s ease-in-out infinite; }
+
+    @keyframes pulse-ext {
+      0%,100% { box-shadow: 0 0 50px rgba(213,0,0,0.3), inset 0 0 50px rgba(213,0,0,0.06); }
+      50%      { box-shadow: 0 0 80px rgba(213,0,0,0.55), inset 0 0 70px rgba(213,0,0,0.1); }
+    }
+
+    .badge-none {
+      background: rgba(139,180,222,0.04);
+      border: 2px dashed rgba(139,180,222,0.18);
+      border-radius: 18px;
+      padding: 36px;
+      text-align: center;
+    }
+    .badge-none .ni { font-size: 2.8rem; margin-bottom: 12px; }
+    .badge-none .nt { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .badge-none .nd { font-size: 0.85rem; color: var(--text2); line-height: 1.5; }
+
+    .route-meta {
+      color: var(--text2);
+      font-size: 0.85rem;
+    }
+    .route-meta strong { color: var(--text1); }
+
+    /* ── Section cards ── */
+    .scard {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+    }
+
+    .stitle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: 18px;
+    }
+    .stitle-icon { font-size: 1rem; }
+    .stitle-count {
+      margin-left: auto;
+      font-weight: 500;
+      letter-spacing: 0;
+      font-size: 0.78rem;
+      color: var(--text3);
+    }
+
+    /* ── PIREP list ── */
+    .pirep-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .pirep-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 16px;
+      background: rgba(255,255,255,0.024);
+      border: 1px solid rgba(255,255,255,0.055);
+      border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .pirep-item:hover { background: rgba(255,255,255,0.04); }
+
+    .pdot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .pmain { flex: 1; min-width: 0; }
+
+    .prow1 {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 3px;
+      flex-wrap: wrap;
+    }
+
+    .pac { font-weight: 700; font-size: 0.88rem; }
+
+    .plvl-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 12px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .praw {
+      font-size: 0.72rem;
+      font-family: 'Courier New', monospace;
+      color: var(--text3);
+    }
+
+    .pdet { font-size: 0.78rem; color: var(--text2); }
+
+    .ptime {
+      font-size: 0.77rem;
+      color: var(--text3);
+      text-align: right;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--text2);
+      font-size: 0.88rem;
+      padding: 22px;
+    }
+
+    /* ── SIGMET list ── */
+    .sigmet-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .sigmet-item {
+      padding: 14px 16px;
+      background: rgba(255,109,0,0.055);
+      border: 1px solid rgba(255,109,0,0.18);
+      border-left: 3px solid #FF6D00;
+      border-radius: 10px;
+    }
+
+    .sig-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 7px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .sig-id {
+      font-weight: 700;
+      font-size: 0.84rem;
+      color: var(--c-severe);
+    }
+
+    .sig-valid {
+      font-size: 0.73rem;
+      color: var(--text2);
+      white-space: nowrap;
+    }
+
+    .sig-raw {
+      font-size: 0.73rem;
+      color: var(--text2);
+      font-family: 'Courier New', monospace;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .no-sigmets {
+      text-align: center;
+      color: #00e676;
+      font-size: 0.88rem;
+      padding: 22px;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px 20px;
+      margin-bottom: 22px;
+    }
+
+    .leg-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.78rem;
+      color: var(--text2);
+    }
+
+    .leg-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 6px currentColor;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 30px 20px 0;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 10px;
+    }
+
+    .disclaimer {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(255,214,0,0.05);
+      border: 1px solid rgba(255,214,0,0.14);
+      border-radius: 10px;
+      padding: 11px 22px;
+      color: rgba(255,229,127,0.65);
+      font-size: 0.78rem;
+      line-height: 1.4;
+      max-width: 600px;
+      text-align: left;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      h1 { font-size: 2.2rem; }
+      .inputs-row { flex-direction: column; gap: 10px; }
+      .arrow { transform: rotate(90deg); text-align: center; align-self: center; }
+      .rating-badge { padding: 28px 28px; }
+      .search-card { padding: 20px 16px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-row">
+      <span class="logo-plane">✈️</span>
+      <h1>SkySmooth</h1>
+    </div>
+    <p class="tagline">Real-time turbulence intelligence powered by live pilot reports</p>
+  </header>
+
+  <!-- Search -->
+  <div class="search-card">
+    <div class="inputs-row">
+      <div class="input-grp">
+        <label for="dep">Departure Airport</label>
+        <div class="inp-wrap">
+          <span class="inp-icon">🛫</span>
+          <input type="text" id="dep" placeholder="City or airport name…" maxlength="60" autocomplete="off" spellcheck="false">
+          <div class="ac-drop" id="dep-drop"></div>
+        </div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="input-grp">
+        <label for="dest">Destination Airport</label>
+        <div class="inp-wrap">
+          <span class="inp-icon">🛬</span>
+          <input type="text" id="dest" placeholder="City or airport name…" maxlength="60" autocomplete="off" spellcheck="false">
+          <div class="ac-drop" id="dest-drop"></div>
+        </div>
+      </div>
+      <button class="btn-check" id="checkBtn" onclick="checkTurbulence()">⚡ Check Turbulence</button>
+    </div>
+
+    <div class="quick-routes">
+      <span class="ql">Quick routes:</span>
+      <button class="rbtn" onclick="go('KJFK','KLAX')">KJFK → KLAX</button>
+      <button class="rbtn" onclick="go('KORD','KATL')">KORD → KATL</button>
+      <button class="rbtn" onclick="go('KSFO','KJFK')">KSFO → KJFK</button>
+      <button class="rbtn" onclick="go('KDFW','KORD')">KDFW → KORD</button>
+      <button class="rbtn" onclick="go('KLAX','KSEA')">KLAX → KSEA</button>
+      <button class="rbtn" onclick="go('KMIA','KBOS')">KMIA → KBOS</button>
+      <button class="rbtn" onclick="go('KDEN','KSFO')">KDEN → KSFO</button>
+      <button class="rbtn" onclick="go('EGLL','KJFK')">EGLL → KJFK</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-bar" id="loadingBar">
+    <div class="spinner"></div>
+    <div class="progress-steps" id="progressSteps">
+      <span class="pstep" id="ps1">📡 Fetching PIREPs…</span>
+      <span class="pstep" id="ps2">⚠️ Fetching SIGMETs…</span>
+      <span class="pstep" id="ps3">🔍 Analyzing…</span>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="err" id="errBox"></div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <!-- Rating -->
+    <div class="rating-wrap" id="ratingWrap"></div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#00c853;color:#00c853"></div>Smooth</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#2196F3;color:#2196F3"></div>Light</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#FFD600;color:#FFD600"></div>Moderate</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#FF6D00;color:#FF6D00"></div>Severe</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#D50000;color:#D50000"></div>Extreme</div>
+    </div>
+
+    <!-- PIREPs -->
+    <div class="scard">
+      <div class="stitle">
+        <span class="stitle-icon">📋</span>
+        Pilot Reports (PIREPs)
+        <span class="stitle-count" id="pirepCnt"></span>
+      </div>
+      <div class="pirep-list" id="pirepList"></div>
+    </div>
+
+    <!-- SIGMETs -->
+    <div class="scard">
+      <div class="stitle">
+        <span class="stitle-icon">⚠️</span>
+        Active Turbulence SIGMETs
+        <span class="stitle-count" id="sigmetCnt"></span>
+      </div>
+      <div class="sigmet-list" id="sigmetList"></div>
+    </div>
+
+  </div><!-- /results -->
+
+  <footer>
+    <div class="disclaimer">
+      ⚠️ <span><strong>For informational use only.</strong> Always follow crew instructions and consult official FAA/NOAA sources before flight. Data sourced from NOAA Aviation Weather Center.</span>
+    </div>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+/* ─────────────────────────────────────────────────
+   Stars background
+───────────────────────────────────────────────── */
+(function () {
+  const canvas = document.getElementById('stars');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = Array.from({ length: 160 }, () => ({
+      x:  Math.random() * canvas.width,
+      y:  Math.random() * canvas.height,
+      r:  Math.random() * 1.3,
+      a:  Math.random() * 0.5 + 0.1,
+      da: (Math.random() * 0.003 + 0.001) * (Math.random() < 0.5 ? 1 : -1)
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.a += s.da;
+      if (s.a > 0.6 || s.a < 0.08) s.da *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200,225,255,${s.a})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  draw();
+})();
+
+/* ─────────────────────────────────────────────────
+   Turbulence data tables
+───────────────────────────────────────────────── */
+const TURB_MAP = {
+  'NEG':0, 'NONE':0, 'SMOOTH':0, 'SMTH':0, 'SMTH-LGT':1,
+  'LGT':1, 'LIGHT':1, 'LGT-MOD':2, 'MOD':2, 'MODERATE':2,
+  'MOD-SEV':3, 'SEV':3, 'SEVERE':3, 'SEV-EXTRM':4, 'EXTRM':4, 'EXTREME':4
+};
+
+const LEVELS = [
+  { name:'Smooth',   cls:'badge-smooth',   icon:'😌', color:'#00e676', dot:'#00c853', pill:'rgba(0,200,83,0.18)',
+    desc:'No turbulence reported along this route. Expect a smooth, comfortable ride with no disruption to cabin service.' },
+  { name:'Light',    cls:'badge-light',    icon:'🌤️',  color:'#64b5f6', dot:'#2196F3', pill:'rgba(33,150,243,0.18)',
+    desc:'Slight, erratic changes in altitude or attitude. Minor strain against seat belts. Food service may be restricted.' },
+  { name:'Moderate', cls:'badge-moderate', icon:'⚡',  color:'#ffe57f', dot:'#FFD600', pill:'rgba(255,214,0,0.18)',
+    desc:'Changes in altitude and attitude, but aircraft remains in control. Occupants feel definite strain against seat belts. Unsecured objects are dislodged.' },
+  { name:'Severe',   cls:'badge-severe',   icon:'🌩️', color:'#ffab40', dot:'#FF6D00', pill:'rgba(255,109,0,0.18)',
+    desc:'Abrupt, large changes in altitude/attitude. Aircraft may be momentarily out of control. Occupants are forced violently against belts. Walking is impossible.' },
+  { name:'Extreme',  cls:'badge-extreme',  icon:'🚨', color:'#ff5252', dot:'#D50000', pill:'rgba(213,0,0,0.18)',
+    desc:'Aircraft is violently tossed about and practically impossible to control. May cause structural damage. Avoid this route or divert immediately.' }
+];
+
+/* ─────────────────────────────────────────────────
+   Helpers
+───────────────────────────────────────────────── */
+function parseLevel(str) {
+  if (!str) return -1;
+  const u = str.toUpperCase().trim();
+  if (u in TURB_MAP) return TURB_MAP[u];
+  for (const [k, v] of Object.entries(TURB_MAP)) {
+    if (u.includes(k)) return v;
+  }
+  return -1;
+}
+
+function worstOfPirep(p) {
+  // Actual NOAA API uses flat fields: tbInt1 / tbInt2 (not a nested array)
+  return Math.max(parseLevel(p.tbInt1), parseLevel(p.tbInt2));
+}
+
+function timeAgo(raw) {
+  if (!raw) return '—';
+  // obsTime is a Unix timestamp (seconds); receiptTime is an ISO string
+  const d = typeof raw === 'number' ? new Date(raw * 1000) : new Date(raw);
+  if (isNaN(d)) return String(raw);
+  const m = Math.floor((Date.now() - d) / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm ? `${h}h ${rm}m ago` : `${h}h ago`;
+}
+
+function fmtUTC(raw) {
+  if (!raw) return '';
+  const d = typeof raw === 'number' ? new Date(raw * 1000) : (() => {
+    const s = String(raw).replace(' ', 'T');
+    return new Date(s.endsWith('Z') ? s : s + 'Z');
+  })();
+  if (isNaN(d)) return String(raw);
+  return d.toISOString().replace('T',' ').slice(0,16) + ' UTC';
+}
+
+function altStr(p) {
+  // Actual NOAA API field is fltLvl (flight level, e.g. 260 = FL260)
+  const fl = p.fltLvl;
+  if (fl == null || fl === 0) return null;
+  return `FL${String(fl).padStart(3, '0')}`;
+}
+
+/* ─────────────────────────────────────────────────
+   API fetchers
+   Strategy: try NOAA directly; if network/CORS error
+   (common in Safari from localhost) silently retry
+   through corsproxy.io, then fail with a clear message.
+───────────────────────────────────────────────── */
+// Cloud proxy on Render — handles CORS for all browsers including Safari.
+// RENDER_PROXY_URL is replaced during deployment with the actual Render URL.
+const PROXY_BASE = typeof RENDER_PROXY_URL !== 'undefined'
+  ? RENDER_PROXY_URL
+  : (window.location.hostname === 'localhost' ? '' : 'REPLACE_WITH_RENDER_URL');
+function toProxyUrl(directUrl) {
+  return PROXY_BASE + '/proxy?url=' + encodeURIComponent(directUrl);
+}
+
+function doFetch(url, ms = 12000) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, {
+    mode: 'cors',
+    credentials: 'omit',
+    cache: 'no-cache',
+    signal: ctrl.signal
+  }).finally(() => clearTimeout(tid));
+}
+
+async function fetchJSON(directUrl) {
+  // Attempt 1 — direct with very short timeout.
+  // In Chrome/Firefox this usually succeeds within 1-3s.
+  // In Safari from localhost CORS blocks it near-instantly, so 2s wastes minimal time.
+  try {
+    const r = await doFetch(directUrl, 2000);
+    if (r.ok) {
+      if (r.status === 204) return [];
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    }
+  } catch (_) { /* CORS/network blocked — fall through to proxy */ }
+
+  // Attempt 2 — local Python proxy (same-origin, works in all browsers including Safari).
+  // 25s gives NOAA plenty of time even on slow days.
+  let r2;
+  try {
+    r2 = await doFetch(toProxyUrl(directUrl), 25000);
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Request timed out. Check your internet connection.');
+    throw new Error(`Both direct and proxy requests failed — check your internet connection.`);
+  }
+  if (!r2.ok) throw new Error(`NOAA API returned HTTP ${r2.status}`);
+  if (r2.status === 204) return [];
+  const d2 = await r2.json();
+  return Array.isArray(d2) ? d2 : [];
+}
+
+async function fetchPireps(icao) {
+  // 'id' (singular) is the correct NOAA API v2 parameter name
+  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=3`);
+}
+
+async function fetchSigmets() {
+  try {
+    return await fetchJSON('https://aviationweather.gov/api/data/airsigmet?format=json&type=sigmet');
+  } catch (_) {
+    return []; // SIGMETs are supplementary — don't fail the whole check
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   UI helpers
+───────────────────────────────────────────────── */
+function go(dep, dest) {
+  document.getElementById('dep').value  = dep;
+  document.getElementById('dest').value = dest;
+}
+
+function showErr(msg) {
+  const b = document.getElementById('errBox');
+  b.innerHTML = `⚠️ ${msg}`;
+  b.classList.add('show');
+}
+function hideErr() {
+  document.getElementById('errBox').classList.remove('show');
+}
+
+function step(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove('done','active');
+  if (state) el.classList.add(state);
+}
+
+/* ─────────────────────────────────────────────────
+   Main
+───────────────────────────────────────────────── */
+async function checkTurbulence() {
+  const dep  = document.getElementById('dep').value.trim().toUpperCase();
+  const dest = document.getElementById('dest').value.trim().toUpperCase();
+
+  if (!dep || !dest) return showErr('Please select both departure and destination airports from the search dropdown.');
+  if (!/^[A-Z0-9]{3,4}$/.test(dep) || !/^[A-Z0-9]{3,4}$/.test(dest))
+    return showErr('Please select an airport from the dropdown suggestions (type a city or airport name).');
+
+  hideErr();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('loadingBar').classList.add('show');
+  document.getElementById('checkBtn').disabled = true;
+  step('ps1','active'); step('ps2',''); step('ps3','');
+
+  try {
+    // Fetch PIREPs for both airports in parallel
+    step('ps1','active');
+    const [depPireps, destPireps] = await Promise.all([
+      fetchPireps(dep),
+      fetchPireps(dest)
+    ]);
+    step('ps1','done');
+
+    // Fetch SIGMETs
+    step('ps2','active');
+    const allSigmets = await fetchSigmets();
+    step('ps2','done');
+
+    step('ps3','active');
+
+    // Deduplicate PIREPs
+    const seen = new Set();
+    const allPireps = [];
+    for (const p of [...depPireps, ...destPireps]) {
+      const key = p.pirepId || (p.obsTime + (p.aircraftRef || '') + JSON.stringify(p.location));
+      if (!seen.has(key)) { seen.add(key); allPireps.push(p); }
+    }
+
+    // Filter PIREPs that have turbulence entries
+    const turbPireps = allPireps
+      .filter(p => worstOfPirep(p) >= 0)
+      .sort((a, b) => worstOfPirep(b) - worstOfPirep(a));
+
+    // Worst overall level
+    const worst = turbPireps.length > 0
+      ? Math.max(...turbPireps.map(worstOfPirep))
+      : -1;
+
+    // Filter turbulence SIGMETs
+    const turbSigmets = allSigmets.filter(s => {
+      const h = (s.hazard || '').toUpperCase();
+      const raw = (s.rawAirSigmet || '').toUpperCase();
+      return h.includes('TURB') || raw.includes('TURB');
+    });
+
+    step('ps3','done');
+
+    render(dep, dest, worst, turbPireps, allPireps.length, turbSigmets);
+
+  } catch (e) {
+    showErr(`Could not fetch weather data: ${e.message}`);
+    console.error(e);
+  } finally {
+    document.getElementById('loadingBar').classList.remove('show');
+    document.getElementById('checkBtn').disabled = false;
+    step('ps1',''); step('ps2',''); step('ps3','');
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   Rendering
+───────────────────────────────────────────────── */
+function render(dep, dest, worst, turbPireps, totalPireps, turbSigmets) {
+  renderRating(dep, dest, worst, turbPireps.length, totalPireps);
+  renderPireps(turbPireps);
+  renderSigmets(turbSigmets);
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderRating(dep, dest, worst, turbCount, totalCount) {
+  const wrap = document.getElementById('ratingWrap');
+
+  if (worst < 0) {
+    wrap.innerHTML = `
+      <div class="badge-none">
+        <div class="ni">🔍</div>
+        <div class="nt">No Turbulence Reports Found</div>
+        <div class="nd">
+          No recent PIREPs with turbulence data near <strong>${dep}</strong> or <strong>${dest}</strong>.<br>
+          This may indicate calm conditions, or reporting is sparse in this area.<br>
+          <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · within 300 nm of each airport</span>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const lvl = LEVELS[worst];
+  wrap.innerHTML = `
+    <div class="rating-badge ${lvl.cls}">
+      <div class="ri">${lvl.icon}</div>
+      <div class="rl">${lvl.name} Turbulence</div>
+      <div class="rd">${lvl.desc}</div>
+    </div>
+    <div class="route-meta">
+      Worst level for <strong>${dep} → ${dest}</strong>
+      &nbsp;·&nbsp; <strong>${turbCount}</strong> turbulence PIREP${turbCount!==1?'s':''}
+      &nbsp;·&nbsp; within <strong>300 nm</strong> of each airport
+    </div>`;
+}
+
+function renderPireps(pireps) {
+  const list = document.getElementById('pirepList');
+  document.getElementById('pirepCnt').textContent =
+    `${pireps.length} report${pireps.length!==1?'s':''}`;
+
+  if (!pireps.length) {
+    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last 3 hours.</div>`;
+    return;
+  }
+
+  list.innerHTML = pireps.map(p => {
+    // NOAA API v2 uses flat fields: tbInt1/tbInt2, tbType1/tbType2, etc.
+    const l1 = parseLevel(p.tbInt1), l2 = parseLevel(p.tbInt2);
+    const useLayer2 = l2 > l1;
+    const worstInt  = useLayer2 ? p.tbInt2  : p.tbInt1;
+    const worstType = useLayer2 ? p.tbType2 : p.tbType1;
+    const worstFreq = useLayer2 ? p.tbFreq2 : p.tbFreq1;
+    const worstBase = useLayer2 ? p.tbBas2  : p.tbBas1;
+    const worstTop  = useLayer2 ? p.tbTop2  : p.tbTop1;
+    const lvlIdx = Math.max(l1, l2);
+    const lvl = lvlIdx >= 0 ? LEVELS[lvlIdx] : null;
+
+    const ac = p.acType || 'Unknown A/C';
+    const alt = altStr(p);
+    const tType = worstType ? ` · ${worstType}` : '';
+    const altRange = (worstBase && worstTop)
+      ? ` · FL${String(worstBase).padStart(3,'0')}–FL${String(worstTop).padStart(3,'0')}`
+      : '';
+    const freq = worstFreq ? ` · ${worstFreq}` : '';
+
+    return `
+      <div class="pirep-item">
+        <div class="pdot" style="background:${lvl?.dot||'#555'};color:${lvl?.dot||'#555'}"></div>
+        <div class="pmain">
+          <div class="prow1">
+            <span class="pac">${ac}</span>
+            ${lvl ? `<span class="plvl-pill" style="background:${lvl.pill};color:${lvl.color}">${lvl.name}</span>` : ''}
+            ${worstInt ? `<span class="praw">${worstInt}${worstType?' / '+worstType:''}</span>` : ''}
+          </div>
+          <div class="pdet">${alt||'Alt unknown'}${tType}${altRange}${freq}</div>
+        </div>
+        <div class="ptime">${timeAgo(p.obsTime)}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderSigmets(sigmets) {
+  const list = document.getElementById('sigmetList');
+  document.getElementById('sigmetCnt').textContent = `${sigmets.length} active`;
+
+  if (!sigmets.length) {
+    list.innerHTML = `<div class="no-sigmets">✅ No active turbulence SIGMETs at this time.</div>`;
+    return;
+  }
+
+  list.innerHTML = sigmets.map(s => {
+    const id  = s.id || s.isigmetId || s.airSigmetId || 'SIGMET';
+    const sev = s.severity ? ` · Severity: ${s.severity}` : '';
+    const vf  = s.validTimeFrom ? fmtUTC(s.validTimeFrom) : '';
+    const vt  = s.validTimeTo   ? fmtUTC(s.validTimeTo)   : '';
+    const raw = s.rawAirSigmet || '';
+
+    return `
+      <div class="sigmet-item">
+        <div class="sig-hdr">
+          <span class="sig-id">⚠️ ${id}${sev}</span>
+          ${vf ? `<span class="sig-valid">${vf} → ${vt}</span>` : ''}
+        </div>
+        ${raw ? `<div class="sig-raw">${raw}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────────────
+   Keyboard shortcut
+───────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    // Don't fire checkTurbulence if an autocomplete dropdown is open
+    const anyOpen = document.querySelector('.ac-drop.open');
+    if (!anyOpen) checkTurbulence();
+  }
+});
+
+/* ─────────────────────────────────────────────────
+   Airport database  [icao, iata, name, city, country]
+───────────────────────────────────────────────── */
+const AIRPORTS = [
+  // ── United States ──
+  ['KATL','ATL','Hartsfield-Jackson Atlanta Intl','Atlanta','US'],
+  ['KLAX','LAX','Los Angeles Intl','Los Angeles','US'],
+  ['KORD','ORD','Chicago O\'Hare Intl','Chicago','US'],
+  ['KDFW','DFW','Dallas/Fort Worth Intl','Dallas','US'],
+  ['KDEN','DEN','Denver Intl','Denver','US'],
+  ['KJFK','JFK','John F. Kennedy Intl','New York','US'],
+  ['KSFO','SFO','San Francisco Intl','San Francisco','US'],
+  ['KSEA','SEA','Seattle-Tacoma Intl','Seattle','US'],
+  ['KLAS','LAS','Harry Reid Intl','Las Vegas','US'],
+  ['KMCO','MCO','Orlando Intl','Orlando','US'],
+  ['KEWR','EWR','Newark Liberty Intl','Newark / New York','US'],
+  ['KPHX','PHX','Phoenix Sky Harbor Intl','Phoenix','US'],
+  ['KMIA','MIA','Miami Intl','Miami','US'],
+  ['KIAH','IAH','George Bush Intercontinental','Houston','US'],
+  ['KBOS','BOS','Logan Intl','Boston','US'],
+  ['KMSP','MSP','Minneapolis-Saint Paul Intl','Minneapolis','US'],
+  ['KDTW','DTW','Detroit Metropolitan Wayne County','Detroit','US'],
+  ['KPHL','PHL','Philadelphia Intl','Philadelphia','US'],
+  ['KLGA','LGA','LaGuardia','New York','US'],
+  ['KBWI','BWI','Baltimore/Washington Intl','Baltimore','US'],
+  ['KIAD','IAD','Dulles Intl','Washington DC','US'],
+  ['KDCA','DCA','Ronald Reagan Washington National','Washington DC','US'],
+  ['KSLC','SLC','Salt Lake City Intl','Salt Lake City','US'],
+  ['KSAN','SAN','San Diego Intl','San Diego','US'],
+  ['KTPA','TPA','Tampa Intl','Tampa','US'],
+  ['KPDX','PDX','Portland Intl','Portland','US'],
+  ['KHOU','HOU','William P. Hobby Airport','Houston','US'],
+  ['KSAT','SAT','San Antonio Intl','San Antonio','US'],
+  ['KAUS','AUS','Austin-Bergstrom Intl','Austin','US'],
+  ['KCLT','CLT','Charlotte Douglas Intl','Charlotte','US'],
+  ['KRDU','RDU','Raleigh-Durham Intl','Raleigh','US'],
+  ['KPIT','PIT','Pittsburgh Intl','Pittsburgh','US'],
+  ['KBNA','BNA','Nashville Intl','Nashville','US'],
+  ['KMEM','MEM','Memphis Intl','Memphis','US'],
+  ['KSTL','STL','St. Louis Lambert Intl','St. Louis','US'],
+  ['KMSY','MSY','Louis Armstrong New Orleans Intl','New Orleans','US'],
+  ['KABQ','ABQ','Albuquerque Intl Sunport','Albuquerque','US'],
+  ['KFLL','FLL','Fort Lauderdale-Hollywood Intl','Fort Lauderdale','US'],
+  ['KJAX','JAX','Jacksonville Intl','Jacksonville','US'],
+  ['KBUF','BUF','Buffalo Niagara Intl','Buffalo','US'],
+  ['KRIC','RIC','Richmond Intl','Richmond','US'],
+  ['KORF','ORF','Norfolk Intl','Norfolk','US'],
+  ['KRNO','RNO','Reno-Tahoe Intl','Reno','US'],
+  ['KOAK','OAK','Oakland Intl','Oakland','US'],
+  ['KSJC','SJC','San Jose Mineta Intl','San Jose','US'],
+  ['KSMF','SMF','Sacramento Intl','Sacramento','US'],
+  ['KBUR','BUR','Hollywood Burbank Airport','Burbank','US'],
+  ['KSNA','SNA','John Wayne Orange County Airport','Santa Ana','US'],
+  ['KLGB','LGB','Long Beach Airport','Long Beach','US'],
+  ['KONT','ONT','Ontario Intl','Ontario','US'],
+  ['KBOI','BOI','Boise Airport','Boise','US'],
+  ['KGEG','GEG','Spokane Intl','Spokane','US'],
+  ['KFAT','FAT','Fresno Yosemite Intl','Fresno','US'],
+  ['KELP','ELP','El Paso Intl','El Paso','US'],
+  ['KMCI','MCI','Kansas City Intl','Kansas City','US'],
+  ['KTUL','TUL','Tulsa Intl','Tulsa','US'],
+  ['KOKC','OKC','Will Rogers World Airport','Oklahoma City','US'],
+  ['KLIT','LIT','Bill and Hillary Clinton National','Little Rock','US'],
+  ['KBHM','BHM','Birmingham-Shuttlesworth Intl','Birmingham','US'],
+  ['KGSO','GSO','Piedmont Triad Intl','Greensboro','US'],
+  ['KCHS','CHS','Charleston Intl','Charleston','US'],
+  ['KSAV','SAV','Savannah/Hilton Head Intl','Savannah','US'],
+  ['KPNS','PNS','Pensacola Intl','Pensacola','US'],
+  ['KCLE','CLE','Cleveland Hopkins Intl','Cleveland','US'],
+  ['KCMH','CMH','John Glenn Columbus Intl','Columbus','US'],
+  ['KIND','IND','Indianapolis Intl','Indianapolis','US'],
+  ['KMKE','MKE','Milwaukee Mitchell Intl','Milwaukee','US'],
+  ['KMDW','MDW','Chicago Midway Intl','Chicago','US'],
+  ['KGRR','GRR','Gerald R. Ford Intl','Grand Rapids','US'],
+  ['KDSM','DSM','Des Moines Intl','Des Moines','US'],
+  ['KOMA','OMA','Eppley Airfield','Omaha','US'],
+  ['KCOS','COS','Colorado Springs Airport','Colorado Springs','US'],
+  ['KJAC','JAC','Jackson Hole Airport','Jackson','US'],
+  ['KBZN','BZN','Bozeman Yellowstone Intl','Bozeman','US'],
+  ['KBIL','BIL','Billings Logan Intl','Billings','US'],
+  ['KFSD','FSD','Sioux Falls Regional','Sioux Falls','US'],
+  ['KFAR','FAR','Hector Intl','Fargo','US'],
+  ['KSDF','SDF','Louisville Muhammad Ali Intl','Louisville','US'],
+  ['KLEX','LEX','Blue Grass Airport','Lexington','US'],
+  ['KAVL','AVL','Asheville Regional','Asheville','US'],
+  ['KGSP','GSP','Greenville-Spartanburg Intl','Greenville','US'],
+  ['KCVG','CVG','Cincinnati/Northern Kentucky Intl','Cincinnati','US'],
+  ['KDAY','DAY','James M. Cox Dayton Intl','Dayton','US'],
+  ['KSBN','SBN','South Bend Intl','South Bend','US'],
+  ['KPWM','PWM','Portland Intl Jetport','Portland','US'],
+  ['KBTV','BTV','Burlington Intl','Burlington','US'],
+  ['KMHT','MHT','Manchester-Boston Regional','Manchester','US'],
+  ['KPVD','PVD','T.F. Green Airport','Providence','US'],
+  ['KBDL','BDL','Bradley Intl','Hartford','US'],
+  ['KRSW','RSW','Southwest Florida Intl','Fort Myers','US'],
+  ['KPBI','PBI','Palm Beach Intl','West Palm Beach','US'],
+  ['KTLH','TLH','Tallahassee Intl','Tallahassee','US'],
+  ['KASE','ASE','Aspen/Pitkin County Airport','Aspen','US'],
+  ['KEGE','EGE','Eagle County Regional','Eagle','US'],
+  ['KMTJ','MTJ','Montrose Regional Airport','Montrose','US'],
+  ['KMSO','MSO','Missoula Montana Airport','Missoula','US'],
+  ['PANC','ANC','Ted Stevens Anchorage Intl','Anchorage','US'],
+  ['PHNL','HNL','Daniel K. Inouye Intl','Honolulu','US'],
+  ['PHKO','KOA','Ellison Onizuka Kona Intl','Kailua-Kona','US'],
+  ['PHOG','OGG','Kahului Airport','Maui','US'],
+  ['PHLH','LIH','Lihue Airport','Lihue / Kauai','US'],
+  ['PAJN','JNU','Juneau Intl','Juneau','US'],
+  ['PAFW','FAI','Fairbanks Intl','Fairbanks','US'],
+  // ── UK & Ireland ──
+  ['EGLL','LHR','Heathrow Airport','London','GB'],
+  ['EGKK','LGW','Gatwick Airport','London','GB'],
+  ['EGSS','STN','Stansted Airport','London','GB'],
+  ['EGGW','LTN','Luton Airport','London','GB'],
+  ['EGLC','LCY','London City Airport','London','GB'],
+  ['EGBB','BHX','Birmingham Airport','Birmingham','GB'],
+  ['EGCC','MAN','Manchester Airport','Manchester','GB'],
+  ['EGPF','GLA','Glasgow Airport','Glasgow','GB'],
+  ['EGPH','EDI','Edinburgh Airport','Edinburgh','GB'],
+  ['EGNT','NCL','Newcastle Airport','Newcastle','GB'],
+  ['EGNX','EMA','East Midlands Airport','Nottingham','GB'],
+  ['EGNM','LBA','Leeds Bradford Airport','Leeds','GB'],
+  ['EGPE','INV','Inverness Airport','Inverness','GB'],
+  ['EGAA','BFS','Belfast Intl','Belfast','GB'],
+  ['EGAC','BHD','Belfast City Airport','Belfast','GB'],
+  ['EIDW','DUB','Dublin Airport','Dublin','IE'],
+  ['EINN','SNN','Shannon Airport','Shannon','IE'],
+  ['EICK','ORK','Cork Airport','Cork','IE'],
+  // ── Canada ──
+  ['CYYZ','YYZ','Toronto Pearson Intl','Toronto','CA'],
+  ['CYVR','YVR','Vancouver Intl','Vancouver','CA'],
+  ['CYUL','YUL','Montreal-Trudeau Intl','Montreal','CA'],
+  ['CYYC','YYC','Calgary Intl','Calgary','CA'],
+  ['CYEG','YEG','Edmonton Intl','Edmonton','CA'],
+  ['CYWG','YWG','Winnipeg Intl','Winnipeg','CA'],
+  ['CYOW','YOW','Ottawa Macdonald-Cartier Intl','Ottawa','CA'],
+  ['CYHZ','YHZ','Halifax Stanfield Intl','Halifax','CA'],
+  ['CYQB','YQB','Quebec City Jean Lesage Intl','Quebec City','CA'],
+  ['CYYJ','YYJ','Victoria Intl','Victoria','CA'],
+  ['CYXU','YXU','London Airport','London','CA'],
+  ['CYYT','YYT','St. John\'s Intl','St. Johns','CA'],
+  ['CYXY','YXY','Whitehorse Intl','Whitehorse','CA'],
+  ['CYZF','YZF','Yellowknife Airport','Yellowknife','CA'],
+  ['CYQR','YQR','Regina Intl','Regina','CA'],
+  ['CYXE','YXE','Saskatoon Diefenbaker Intl','Saskatoon','CA'],
+  ['CYQM','YQM','Greater Moncton Intl','Moncton','CA'],
+  ['CYHM','YHM','John C. Munro Hamilton Intl','Hamilton','CA'],
+  // ── France ──
+  ['LFPG','CDG','Charles de Gaulle Airport','Paris','FR'],
+  ['LFPO','ORY','Orly Airport','Paris','FR'],
+  ['LFMN','NCE','Nice Cote d\'Azur','Nice','FR'],
+  ['LFLL','LYS','Lyon-Saint-Exupery','Lyon','FR'],
+  ['LFBO','TLS','Toulouse-Blagnac','Toulouse','FR'],
+  ['LFBD','BOD','Bordeaux-Merignac','Bordeaux','FR'],
+  ['LFRS','NTE','Nantes Atlantique','Nantes','FR'],
+  ['LFML','MRS','Marseille Provence','Marseille','FR'],
+  ['LFSB','BSL','EuroAirport Basel-Mulhouse-Freiburg','Basel','FR'],
+  // ── Germany ──
+  ['EDDF','FRA','Frankfurt Airport','Frankfurt','DE'],
+  ['EDDM','MUC','Munich Airport','Munich','DE'],
+  ['EDDB','BER','Berlin Brandenburg Airport','Berlin','DE'],
+  ['EDDL','DUS','Dusseldorf Airport','Dusseldorf','DE'],
+  ['EDDK','CGN','Cologne Bonn Airport','Cologne','DE'],
+  ['EDDH','HAM','Hamburg Airport','Hamburg','DE'],
+  ['EDDS','STR','Stuttgart Airport','Stuttgart','DE'],
+  ['EDDV','HAJ','Hannover Airport','Hanover','DE'],
+  ['EDDN','NUE','Nuremberg Airport','Nuremberg','DE'],
+  ['EDDP','LEJ','Leipzig Halle Airport','Leipzig','DE'],
+  ['EDDC','DRS','Dresden Airport','Dresden','DE'],
+  // ── Spain & Portugal ──
+  ['LEMD','MAD','Madrid Barajas Airport','Madrid','ES'],
+  ['LEBL','BCN','Barcelona El Prat','Barcelona','ES'],
+  ['LEMG','AGP','Malaga Airport','Malaga','ES'],
+  ['LEPA','PMI','Palma de Mallorca Airport','Palma','ES'],
+  ['LEAL','ALC','Alicante-Elche Airport','Alicante','ES'],
+  ['LEVC','VLC','Valencia Airport','Valencia','ES'],
+  ['LEZL','SVQ','Seville Airport','Seville','ES'],
+  ['LEIB','IBZ','Ibiza Airport','Ibiza','ES'],
+  ['LEBB','BIO','Bilbao Airport','Bilbao','ES'],
+  ['LEAM','AMU','Almeria Airport','Almeria','ES'],
+  ['LPPT','LIS','Lisbon Humberto Delgado Airport','Lisbon','PT'],
+  ['LPPR','OPO','Francisco Sa Carneiro Airport','Porto','PT'],
+  ['LPFR','FAO','Faro Airport','Faro','PT'],
+  ['LPMA','FNC','Madeira Airport','Funchal','PT'],
+  // ── Italy ──
+  ['LIRF','FCO','Rome Fiumicino Airport','Rome','IT'],
+  ['LIMC','MXP','Malpensa Airport','Milan','IT'],
+  ['LIML','LIN','Linate Airport','Milan','IT'],
+  ['LIME','BGY','Bergamo Orio al Serio','Bergamo','IT'],
+  ['LIPZ','VCE','Venice Marco Polo','Venice','IT'],
+  ['LIRP','PSA','Pisa Galileo Galilei','Pisa','IT'],
+  ['LIRN','NAP','Naples Intl','Naples','IT'],
+  ['LICJ','PMO','Palermo Airport','Palermo','IT'],
+  ['LICC','CTA','Catania-Fontanarossa','Catania','IT'],
+  ['LIMF','TRN','Turin Airport','Turin','IT'],
+  ['LIPE','BLQ','Bologna Airport','Bologna','IT'],
+  ['LIBD','BRI','Bari Karol Wojtyla Airport','Bari','IT'],
+  ['LIEE','CAG','Cagliari Elmas Airport','Cagliari','IT'],
+  // ── Netherlands & Belgium ──
+  ['EHAM','AMS','Amsterdam Schiphol','Amsterdam','NL'],
+  ['EHRD','RTM','Rotterdam The Hague Airport','Rotterdam','NL'],
+  ['EBBR','BRU','Brussels Airport','Brussels','BE'],
+  ['EBCI','CRL','Brussels South Charleroi','Charleroi','BE'],
+  ['ELLX','LUX','Luxembourg Airport','Luxembourg','LU'],
+  // ── Switzerland & Austria ──
+  ['LSZH','ZRH','Zurich Airport','Zurich','CH'],
+  ['LSGG','GVA','Geneva Airport','Geneva','CH'],
+  ['LOWW','VIE','Vienna Intl Airport','Vienna','AT'],
+  ['LOWS','SZG','Salzburg Airport','Salzburg','AT'],
+  ['LOWI','INN','Innsbruck Airport','Innsbruck','AT'],
+  ['LOWG','GRZ','Graz Airport','Graz','AT'],
+  // ── Scandinavia ──
+  ['ENGM','OSL','Oslo Gardermoen Airport','Oslo','NO'],
+  ['ESSA','ARN','Stockholm Arlanda','Stockholm','SE'],
+  ['ESGG','GOT','Gothenburg Landvetter','Gothenburg','SE'],
+  ['ESMS','MMX','Malmo Airport','Malmo','SE'],
+  ['EKCH','CPH','Copenhagen Airport','Copenhagen','DK'],
+  ['EFHK','HEL','Helsinki Vantaa Airport','Helsinki','FI'],
+  ['ENBR','BGO','Bergen Airport Flesland','Bergen','NO'],
+  ['ENVA','TRD','Trondheim Airport Vaernes','Trondheim','NO'],
+  ['ENTC','TOS','Tromso Airport','Tromso','NO'],
+  ['BIKF','KEF','Keflavik Intl','Reykjavik','IS'],
+  // ── Eastern Europe ──
+  ['EPWA','WAW','Warsaw Chopin Airport','Warsaw','PL'],
+  ['EPKK','KRK','Krakow John Paul II Intl','Krakow','PL'],
+  ['EPGD','GDN','Gdansk Lech Walesa Airport','Gdansk','PL'],
+  ['LKPR','PRG','Prague Vaclav Havel Airport','Prague','CZ'],
+  ['LHBP','BUD','Budapest Ferenc Liszt Intl','Budapest','HU'],
+  ['LROP','OTP','Henri Coanda Intl','Bucharest','RO'],
+  ['LBBG','BOJ','Burgas Airport','Burgas','BG'],
+  ['LBSF','SOF','Sofia Airport','Sofia','BG'],
+  ['LJLJ','LJU','Ljubljana Joze Pucnik Airport','Ljubljana','SI'],
+  ['LDZA','ZAG','Zagreb Airport','Zagreb','HR'],
+  ['LYBE','BEG','Belgrade Nikola Tesla','Belgrade','RS'],
+  ['LATI','TIA','Tirana Nene Tereza Airport','Tirana','AL'],
+  ['UKBB','KBP','Boryspil Intl','Kyiv','UA'],
+  ['EVRA','RIX','Riga Intl Airport','Riga','LV'],
+  ['EETU','TLL','Lennart Meri Tallinn Airport','Tallinn','EE'],
+  ['EYVI','VNO','Vilnius Airport','Vilnius','LT'],
+  ['UUEE','SVO','Sheremetyevo Intl','Moscow','RU'],
+  ['UUDD','DME','Domodedovo Intl','Moscow','RU'],
+  ['ULLI','LED','Pulkovo Airport','St. Petersburg','RU'],
+  ['UMMS','MSQ','Minsk Intl','Minsk','BY'],
+  // ── Greece & Cyprus ──
+  ['LGAV','ATH','Athens Eleftherios Venizelos','Athens','GR'],
+  ['LGTS','SKG','Thessaloniki Macedonia Airport','Thessaloniki','GR'],
+  ['LGRO','RHO','Rhodes Diagoras Airport','Rhodes','GR'],
+  ['LGIR','HER','Heraklion Nikos Kazantzakis','Heraklion','GR'],
+  ['LGKR','CFU','Corfu Airport','Corfu','GR'],
+  ['LGZA','ZTH','Zakynthos Intl Airport','Zakynthos','GR'],
+  ['LGSA','CHQ','Chania Intl Airport','Chania','GR'],
+  ['LCPH','PFO','Paphos Intl Airport','Paphos','CY'],
+  ['LCLK','LCA','Larnaca Intl Airport','Larnaca','CY'],
+  // ── Turkey ──
+  ['LTFM','IST','Istanbul Airport','Istanbul','TR'],
+  ['LTFJ','SAW','Sabiha Gokcen Intl','Istanbul','TR'],
+  ['LTAC','ESB','Ankara Esenboga Airport','Ankara','TR'],
+  ['LTBJ','ADB','Izmir Adnan Menderes','Izmir','TR'],
+  ['LTAI','AYT','Antalya Airport','Antalya','TR'],
+  ['LTFE','BJV','Milas-Bodrum Airport','Bodrum','TR'],
+  ['LTBS','DLM','Dalaman Airport','Dalaman','TR'],
+  // ── Middle East ──
+  ['OMDB','DXB','Dubai Intl','Dubai','AE'],
+  ['OMDW','DWC','Al Maktoum Intl','Dubai','AE'],
+  ['OMAA','AUH','Abu Dhabi Intl','Abu Dhabi','AE'],
+  ['OMSJ','SHJ','Sharjah Intl','Sharjah','AE'],
+  ['OERK','RUH','King Khalid Intl','Riyadh','SA'],
+  ['OEJN','JED','King Abdulaziz Intl','Jeddah','SA'],
+  ['OEDF','DMM','King Fahd Intl','Dammam','SA'],
+  ['OTBD','DOH','Doha Hamad Intl','Doha','QA'],
+  ['OKBK','KWI','Kuwait Intl Airport','Kuwait City','KW'],
+  ['OBBI','BAH','Bahrain Intl Airport','Manama','BH'],
+  ['OOMS','MCT','Muscat Intl Airport','Muscat','OM'],
+  ['LLBG','TLV','Ben Gurion Intl','Tel Aviv','IL'],
+  ['OJAI','AMM','Amman Queen Alia Intl','Amman','JO'],
+  ['OLBA','BEY','Beirut Rafic Hariri Intl','Beirut','LB'],
+  ['OIIE','IKA','Tehran Imam Khomeini Intl','Tehran','IR'],
+  ['ORBI','BGW','Baghdad Intl Airport','Baghdad','IQ'],
+  // ── Asia – East ──
+  ['RJAA','NRT','Tokyo Narita Intl','Tokyo','JP'],
+  ['RJTT','HND','Tokyo Haneda Intl','Tokyo','JP'],
+  ['RJBB','KIX','Kansai Intl Airport','Osaka','JP'],
+  ['RJOO','ITM','Osaka Itami Airport','Osaka','JP'],
+  ['RJCC','CTS','New Chitose Airport','Sapporo','JP'],
+  ['RJFF','FUK','Fukuoka Airport','Fukuoka','JP'],
+  ['ROAH','OKA','Naha Airport','Okinawa','JP'],
+  ['ZBAA','PEK','Beijing Capital Intl','Beijing','CN'],
+  ['ZBAD','PKX','Beijing Daxing Intl','Beijing','CN'],
+  ['ZSPD','PVG','Shanghai Pudong Intl','Shanghai','CN'],
+  ['ZSSS','SHA','Shanghai Hongqiao Intl','Shanghai','CN'],
+  ['ZGGG','CAN','Guangzhou Baiyun Intl','Guangzhou','CN'],
+  ['VHHH','HKG','Hong Kong Intl','Hong Kong','HK'],
+  ['ZUUU','CTU','Chengdu Shuangliu Intl','Chengdu','CN'],
+  ['ZUCK','CKG','Chongqing Jiangbei Intl','Chongqing','CN'],
+  ['ZLXY','XIY','Xi\'an Xianyang Intl','Xi\'an','CN'],
+  ['ZHHH','WUH','Wuhan Tianhe Intl','Wuhan','CN'],
+  ['ZPPP','KMG','Kunming Changshui Intl','Kunming','CN'],
+  ['ZWWW','URC','Urumqi Diwopu Intl','Urumqi','CN'],
+  ['ZYTX','SHE','Shenyang Taoxian Intl','Shenyang','CN'],
+  ['ZYCC','CGQ','Changchun Longjia Intl','Changchun','CN'],
+  ['ZYHB','HRB','Harbin Taiping Intl','Harbin','CN'],
+  ['ZSQD','TAO','Qingdao Jiaodong Intl','Qingdao','CN'],
+  ['RCTP','TPE','Taiwan Taoyuan Intl','Taipei','TW'],
+  ['RCSS','TSA','Taipei Songshan Airport','Taipei','TW'],
+  ['RCKH','KHH','Kaohsiung Intl','Kaohsiung','TW'],
+  ['RKSI','ICN','Incheon Intl Airport','Seoul','KR'],
+  ['RKSS','GMP','Seoul Gimpo Intl','Seoul','KR'],
+  ['RKPK','PUS','Gimhae Intl Airport','Busan','KR'],
+  ['RKJJ','CJU','Jeju Intl Airport','Jeju','KR'],
+  ['VMMC','MFM','Macau Intl Airport','Macau','MO'],
+  // ── Asia – Southeast ──
+  ['WSSS','SIN','Singapore Changi Airport','Singapore','SG'],
+  ['VTBS','BKK','Suvarnabhumi Airport','Bangkok','TH'],
+  ['VTBD','DMK','Don Mueang Intl','Bangkok','TH'],
+  ['VTCC','CNX','Chiang Mai Intl','Chiang Mai','TH'],
+  ['VVNB','HAN','Noi Bai Intl','Hanoi','VN'],
+  ['VVTS','SGN','Tan Son Nhat Intl','Ho Chi Minh City','VN'],
+  ['VDPP','PNH','Phnom Penh Intl','Phnom Penh','KH'],
+  ['VYYY','RGN','Yangon Intl Airport','Yangon','MM'],
+  ['WMKK','KUL','Kuala Lumpur Intl','Kuala Lumpur','MY'],
+  ['WMKP','PEN','Penang Intl','Penang','MY'],
+  ['WMKL','LGK','Langkawi Intl','Langkawi','MY'],
+  ['WADD','DPS','Ngurah Rai Intl','Bali','ID'],
+  ['WIII','CGK','Soekarno-Hatta Intl','Jakarta','ID'],
+  ['WIOO','SUB','Juanda Intl Airport','Surabaya','ID'],
+  ['RPLL','MNL','Ninoy Aquino Intl','Manila','PH'],
+  ['RPVM','CEB','Mactan-Cebu Intl','Cebu','PH'],
+  ['VLVT','VTE','Wattay Intl','Vientiane','LA'],
+  // ── Asia – South ──
+  ['VABB','BOM','Chhatrapati Shivaji Maharaj Intl','Mumbai','IN'],
+  ['VIDP','DEL','Indira Gandhi Intl','New Delhi','IN'],
+  ['VOMM','MAA','Chennai Intl Airport','Chennai','IN'],
+  ['VOBL','BLR','Kempegowda Intl','Bangalore','IN'],
+  ['VECC','CCU','Netaji Subhash Chandra Bose Intl','Kolkata','IN'],
+  ['VOHS','HYD','Rajiv Gandhi Intl','Hyderabad','IN'],
+  ['VOCI','COK','Cochin Intl Airport','Kochi','IN'],
+  ['VOGB','GOI','Goa Intl Airport','Goa','IN'],
+  ['VOCL','CCJ','Calicut Intl Airport','Kozhikode','IN'],
+  ['OPKC','KHI','Jinnah Intl Airport','Karachi','PK'],
+  ['OPLA','LHE','Allama Iqbal Intl','Lahore','PK'],
+  ['OPRN','ISB','Islamabad Intl Airport','Islamabad','PK'],
+  ['VCBI','CMB','Bandaranaike Intl Airport','Colombo','LK'],
+  ['VGZR','DAC','Hazrat Shahjalal Intl','Dhaka','BD'],
+  ['VNCG','KTM','Tribhuvan Intl Airport','Kathmandu','NP'],
+  ['VRMM','MLE','Velana Intl Airport','Male','MV'],
+  // ── Central Asia ──
+  ['UAAA','ALA','Almaty Intl Airport','Almaty','KZ'],
+  ['UACC','NQZ','Nursultan Nazarbayev Intl','Nur-Sultan','KZ'],
+  ['UTTT','TAS','Tashkent Intl Airport','Tashkent','UZ'],
+  ['UAFM','FRU','Manas Intl Airport','Bishkek','KG'],
+  // ── Caucasus ──
+  ['UGGG','TBS','Tbilisi Intl Airport','Tbilisi','GE'],
+  ['UBBB','GYD','Heydar Aliyev Intl','Baku','AZ'],
+  ['UDYZ','EVN','Zvartnots Intl Airport','Yerevan','AM'],
+  // ── Africa ──
+  ['FAOR','JNB','O.R. Tambo Intl','Johannesburg','ZA'],
+  ['FACT','CPT','Cape Town Intl','Cape Town','ZA'],
+  ['FALE','DUR','King Shaka Intl','Durban','ZA'],
+  ['HAAB','ADD','Addis Ababa Bole Intl','Addis Ababa','ET'],
+  ['DNMM','LOS','Murtala Muhammed Intl','Lagos','NG'],
+  ['DNAA','ABV','Nnamdi Azikiwe Intl','Abuja','NG'],
+  ['HECA','CAI','Cairo Intl Airport','Cairo','EG'],
+  ['GMMN','CMN','Mohammed V Intl','Casablanca','MA'],
+  ['GMAD','AGA','Agadir Al Massira Airport','Agadir','MA'],
+  ['GMFM','RAK','Marrakech Menara Airport','Marrakech','MA'],
+  ['GMME','RBA','Rabat-Sale Airport','Rabat','MA'],
+  ['DAAG','ALG','Houari Boumediene Airport','Algiers','DZ'],
+  ['DTTA','TUN','Tunis-Carthage Intl','Tunis','TN'],
+  ['HLLT','TIP','Tripoli Intl Airport','Tripoli','LY'],
+  ['HKJK','NBO','Jomo Kenyatta Intl','Nairobi','KE'],
+  ['HTDA','DAR','Julius Nyerere Intl','Dar es Salaam','TZ'],
+  ['HUEN','EBB','Entebbe Intl Airport','Kampala','UG'],
+  ['HRYR','KGL','Kigali Intl Airport','Kigali','RW'],
+  ['GOOY','DKR','Leopold Sedar Senghor Intl','Dakar','SN'],
+  ['DIAP','ABJ','Felix-Houphouet-Boigny Intl','Abidjan','CI'],
+  ['DGAA','ACC','Kotoka Intl Airport','Accra','GH'],
+  ['FOOL','LBV','Libreville Intl Airport','Libreville','GA'],
+  ['FWKI','LLW','Kamuzu Intl Airport','Lilongwe','MW'],
+  ['FLLS','LUN','Kenneth Kaunda Intl','Lusaka','ZM'],
+  ['FVHA','HRE','Robert Gabriel Mugabe Intl','Harare','ZW'],
+  ['FQMA','MPM','Maputo Intl Airport','Maputo','MZ'],
+  ['FYWH','WDH','Hosea Kutako Intl','Windhoek','NA'],
+  ['FBSK','GBE','Sir Seretse Khama Intl','Gaborone','BW'],
+  // ── Australia & Oceania ──
+  ['YSSY','SYD','Sydney Kingsford Smith','Sydney','AU'],
+  ['YMML','MEL','Melbourne Airport','Melbourne','AU'],
+  ['YBBN','BNE','Brisbane Airport','Brisbane','AU'],
+  ['YPPH','PER','Perth Airport','Perth','AU'],
+  ['YPAD','ADL','Adelaide Airport','Adelaide','AU'],
+  ['YMHB','HBA','Hobart Airport','Hobart','AU'],
+  ['YSCB','CBR','Canberra Airport','Canberra','AU'],
+  ['YBCS','CNS','Cairns Airport','Cairns','AU'],
+  ['YBAF','OOL','Gold Coast Airport','Gold Coast','AU'],
+  ['YBMC','MCY','Sunshine Coast Airport','Maroochydore','AU'],
+  ['NZAA','AKL','Auckland Airport','Auckland','NZ'],
+  ['NZWN','WLG','Wellington Airport','Wellington','NZ'],
+  ['NZCH','CHC','Christchurch Intl','Christchurch','NZ'],
+  ['NZQN','ZQN','Queenstown Airport','Queenstown','NZ'],
+  ['NFFN','NAN','Nadi Intl Airport','Nadi','FJ'],
+  ['PGUM','GUM','Antonio B. Won Pat Intl','Hagatna','GU'],
+  // ── South America ──
+  ['SBGR','GRU','Guarulhos Intl','Sao Paulo','BR'],
+  ['SBSP','CGH','Congonhas Airport','Sao Paulo','BR'],
+  ['SBGL','GIG','Galeao Intl','Rio de Janeiro','BR'],
+  ['SBRJ','SDU','Santos Dumont Airport','Rio de Janeiro','BR'],
+  ['SBBR','BSB','Brasilia Intl','Brasilia','BR'],
+  ['SBCF','CNF','Tancredo Neves Intl','Belo Horizonte','BR'],
+  ['SBSV','SSA','Salvador Intl','Salvador','BR'],
+  ['SBRF','REC','Recife Guararapes Intl','Recife','BR'],
+  ['SBFZ','FOR','Fortaleza Pinto Martins Intl','Fortaleza','BR'],
+  ['SBPA','POA','Porto Alegre Salgado Filho Intl','Porto Alegre','BR'],
+  ['SBMN','MAO','Manaus Eduardo Gomes Intl','Manaus','BR'],
+  ['MMMX','MEX','Mexico City Benito Juarez Intl','Mexico City','MX'],
+  ['MMGL','GDL','Guadalajara Miguel Hidalgo Intl','Guadalajara','MX'],
+  ['MMMY','MTY','Monterrey Intl Airport','Monterrey','MX'],
+  ['MMTJ','TIJ','Tijuana General Abelardo Rodriguez Intl','Tijuana','MX'],
+  ['MMUN','CUN','Cancun Intl Airport','Cancun','MX'],
+  ['MMPG','PVR','Puerto Vallarta Gustavo Diaz Ordaz Intl','Puerto Vallarta','MX'],
+  ['SKBO','BOG','Bogota El Dorado Intl','Bogota','CO'],
+  ['SKMD','MDE','Medellin Jose Maria Cordova Intl','Medellin','CO'],
+  ['SKCL','CLO','Cali Alfonso Bonilla Aragon Intl','Cali','CO'],
+  ['SEQM','UIO','Quito Mariscal Sucre Intl','Quito','EC'],
+  ['SEGU','GYE','Guayaquil Jose Joaquin de Olmedo Intl','Guayaquil','EC'],
+  ['SPJC','LIM','Lima Jorge Chavez Intl','Lima','PE'],
+  ['SCEL','SCL','Santiago Arturo Merino Benitez Intl','Santiago','CL'],
+  ['SAEZ','EZE','Buenos Aires Ministro Pistarini Intl','Buenos Aires','AR'],
+  ['SABE','AEP','Buenos Aires Jorge Newbery Airfield','Buenos Aires','AR'],
+  ['SACO','COR','Cordoba Ambrosio Taravella Intl','Cordoba','AR'],
+  ['SUAA','MVD','Montevideo Carrasco Intl','Montevideo','UY'],
+  ['SVMI','CCS','Caracas Simon Bolivar Intl','Caracas','VE'],
+  ['SGAS','ASU','Asuncion Silvio Pettirossi Intl','Asuncion','PY'],
+  ['SLVR','VVI','Santa Cruz Viru Viru Intl','Santa Cruz','BO'],
+  ['SLLP','LPB','La Paz El Alto Intl','La Paz','BO'],
+  // ── Caribbean & Central America ──
+  ['MUHA','HAV','Havana Jose Marti Intl','Havana','CU'],
+  ['MKJP','KIN','Kingston Norman Manley Intl','Kingston','JM'],
+  ['MDSD','SDQ','Santo Domingo Las Americas Intl','Santo Domingo','DO'],
+  ['TJSJ','SJU','San Juan Luis Munoz Marin Intl','San Juan','PR'],
+  ['TNCA','AUA','Oranjestad Queen Beatrix Intl','Oranjestad','AW'],
+  ['MROC','SJO','San Jose Juan Santamaria Intl','San Jose','CR'],
+  ['MHLM','SAP','San Pedro Sula Ramon Villeda Morales Intl','San Pedro Sula','HN'],
+  ['MHTG','TGU','Tegucigalpa Toncontin Intl','Tegucigalpa','HN'],
+  ['MSSS','SAL','San Salvador El Salvador Intl','San Salvador','SV'],
+  ['MGGT','GUA','Guatemala City La Aurora Intl','Guatemala City','GT'],
+  ['MZBZ','BZE','Belize City Philip Goldson Intl','Belize City','BZ'],
+  ['MYNN','NAS','Nassau Lynden Pindling Intl','Nassau','BS'],
+  ['TTPP','POS','Port of Spain Piarco Intl','Port of Spain','TT'],
+  ['TBPB','BGI','Bridgetown Grantley Adams Intl','Bridgetown','BB'],
+  ['TXKF','BDA','Hamilton L.F. Wade Intl','Hamilton','BM'],
+  ['TFFR','PTP','Pointe-a-Pitre Guadeloupe Pole Caraibes','Pointe-a-Pitre','GP'],
+];
+
+/* ─────────────────────────────────────────────────
+   Airport search
+───────────────────────────────────────────────── */
+function searchAirports(raw) {
+  const q = raw.trim();
+  if (q.length < 2) return [];
+  const u = q.toUpperCase();
+  const exact = [], startsWith = [], contains = [];
+  for (const a of AIRPORTS) {
+    const [icao, iata, name, city] = a;
+    const nameU = name.toUpperCase(), cityU = city.toUpperCase();
+    if (icao === u || iata === u) { exact.push(a); continue; }
+    if (icao.startsWith(u) || iata.startsWith(u) || cityU.startsWith(u) || nameU.startsWith(u))
+      startsWith.push(a);
+    else if (cityU.includes(u) || nameU.includes(u))
+      contains.push(a);
+  }
+  return [...exact, ...startsWith, ...contains].slice(0, 8);
+}
+
+/* ─────────────────────────────────────────────────
+   Autocomplete
+───────────────────────────────────────────────── */
+function setupAutocomplete(inputId, dropId) {
+  const inp  = document.getElementById(inputId);
+  const drop = document.getElementById(dropId);
+  let focusedIdx = -1;
+
+  function closeDrop() { drop.classList.remove('open'); focusedIdx = -1; }
+
+  function moveFocus(delta) {
+    const items = drop.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    focusedIdx = Math.max(0, Math.min(focusedIdx + delta, items.length - 1));
+    items.forEach((el, i) => el.classList.toggle('focused', i === focusedIdx));
+  }
+
+  function selectItem(icao) {
+    inp.value = icao;
+    closeDrop();
+  }
+
+  inp.addEventListener('input', () => {
+    const hits = searchAirports(inp.value);
+    if (!hits.length) { closeDrop(); return; }
+    focusedIdx = -1;
+    drop.innerHTML = hits.map(a =>
+      `<div class="ac-item" data-icao="${a[0]}">` +
+        `<span class="ac-code">${a[0]}</span>` +
+        `<span class="ac-iata">${a[1]}</span>` +
+        `<div class="ac-info">` +
+          `<div class="ac-name">${a[2]}</div>` +
+          `<div class="ac-loc">${a[3]}, ${a[4]}</div>` +
+        `</div>` +
+      `</div>`
+    ).join('');
+    drop.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); selectItem(el.dataset.icao); });
+    });
+    drop.classList.add('open');
+  });
+
+  inp.addEventListener('keydown', e => {
+    if (!drop.classList.contains('open')) return;
+    if (e.key === 'ArrowDown')  { e.preventDefault(); moveFocus(+1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Escape')    { closeDrop(); }
+    else if (e.key === 'Enter') {
+      const focused = drop.querySelector('.ac-item.focused');
+      if (focused) { e.preventDefault(); e.stopPropagation(); selectItem(focused.dataset.icao); }
+    }
+  });
+
+  inp.addEventListener('blur', () => setTimeout(closeDrop, 160));
+}
+
+setupAutocomplete('dep',  'dep-drop');
+setupAutocomplete('dest', 'dest-drop');
+</script>
+</body>
+</html>

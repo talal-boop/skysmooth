@@ -678,7 +678,7 @@
       padding: 16px 22px 12px;
     }
     #routeMap {
-      height: 300px;
+      height: 360px;
       width: 100%;
       background: #05080f;
     }
@@ -1349,6 +1349,26 @@ function greatCirclePoints(lat1, lon1, lat2, lon2, n = 120) {
   return pts;
 }
 
+// Fetch latest RainViewer satellite timestamp and add cloud layer
+async function addCloudLayer(map) {
+  try {
+    const r = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-cache' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const host = data.host || 'https://tilecache.rainviewer.com';
+    const frames = data.satellite?.infrared;
+    if (!frames?.length) return;
+    const latest = frames[frames.length - 1];
+    L.tileLayer(`${host}${latest.path}/256/{z}/{x}/{y}/0/0_1.png`, {
+      opacity: 0.55,
+      attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>',
+      tileSize: 256
+    }).addTo(map);
+  } catch(e) {
+    console.warn('Cloud layer unavailable:', e);
+  }
+}
+
 function renderMap(dep, dest, pireps) {
   if (_map) { _map.remove(); _map = null; }
 
@@ -1358,6 +1378,9 @@ function renderMap(dep, dest, pireps) {
     attribution: '© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">Carto</a>',
     subdomains: 'abcd', maxZoom: 12
   }).addTo(_map);
+
+  // Real-time cloud layer — loads async, won't block map
+  addCloudLayer(_map);
 
   const bounds = L.latLngBounds();
   const depC = AIRPORT_COORDS[dep], destC = AIRPORT_COORDS[dest];

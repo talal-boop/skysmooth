@@ -11,6 +11,8 @@
   <meta name="apple-mobile-web-app-title" content="SkySmooth">
   <meta name="theme-color" content="#060e1a">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --bg0: #05080f;
@@ -655,6 +657,49 @@
       box-shadow: 0 0 6px currentColor;
     }
 
+    /* ── Route Map ── */
+    .map-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    .map-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text2);
+      padding: 16px 22px 12px;
+    }
+    #routeMap {
+      height: 300px;
+      width: 100%;
+      background: #05080f;
+    }
+    .leaflet-container { background: #05080f !important; }
+    .leaflet-popup-content-wrapper {
+      background: #0c1826;
+      color: #e8f1ff;
+      border: 1px solid #1e3f78;
+      border-radius: 10px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.82rem;
+    }
+    .leaflet-popup-tip { background: #0c1826; }
+    .leaflet-popup-close-button { color: #8db4de !important; }
+    .map-airport-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+      filter: drop-shadow(0 0 8px rgba(77,166,255,0.9));
+    }
+    @media (max-width: 600px) { #routeMap { height: 220px; } }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -766,6 +811,12 @@
       <div class="leg-item"><div class="leg-dot" style="background:#FFD600;color:#FFD600"></div>Moderate</div>
       <div class="leg-item"><div class="leg-dot" style="background:#FF6D00;color:#FF6D00"></div>Severe</div>
       <div class="leg-item"><div class="leg-dot" style="background:#D50000;color:#D50000"></div>Extreme</div>
+    </div>
+
+    <!-- Route Map -->
+    <div class="map-card">
+      <div class="map-title">🗺️ &nbsp;Route Map</div>
+      <div id="routeMap"></div>
     </div>
 
     <!-- PIREPs -->
@@ -1106,6 +1157,8 @@ function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets)
   renderSigmets(turbSigmets);
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Render map after results are visible (Leaflet needs a visible container)
+  setTimeout(() => renderMap(dep, dest, turbPireps), 50);
 }
 
 function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
@@ -1213,6 +1266,138 @@ function renderSigmets(sigmets) {
         ${raw ? `<div class="sig-raw">${raw}</div>` : ''}
       </div>`;
   }).join('');
+}
+
+/* ─────────────────────────────────────────────────
+   Route Map
+───────────────────────────────────────────────── */
+let _map = null;
+
+// Airport coordinates [lat, lon]
+const AIRPORT_COORDS = {
+  // ── United States ──
+  'KATL':[33.6367,-84.4281],'KLAX':[33.9425,-118.4081],'KORD':[41.9742,-87.9073],
+  'KDFW':[32.8998,-97.0403],'KDEN':[39.8561,-104.6737],'KJFK':[40.6413,-73.7781],
+  'KSFO':[37.6213,-122.379],'KSEA':[47.4502,-122.3088],'KLAS':[36.084,-115.1537],
+  'KMCO':[28.4294,-81.3089],'KEWR':[40.6925,-74.1687],'KPHX':[33.4373,-112.0078],
+  'KMIA':[25.7959,-80.287],'KIAH':[29.9902,-95.3368],'KBOS':[42.3656,-71.0096],
+  'KMSP':[44.882,-93.2218],'KDTW':[42.2162,-83.3554],'KPHL':[39.8719,-75.2411],
+  'KLGA':[40.7772,-73.8726],'KBWI':[39.1754,-76.6682],'KIAD':[38.9531,-77.4565],
+  'KDCA':[38.8521,-77.0377],'KSLC':[40.7884,-111.9778],'KSAN':[32.7338,-117.1933],
+  'KTPA':[27.9755,-82.5332],'KPDX':[45.5898,-122.5951],'KHOU':[29.6454,-95.2789],
+  'KSAT':[29.5337,-98.4698],'KAUS':[30.1975,-97.6664],'KCLT':[35.214,-80.9431],
+  'KRDU':[35.8776,-78.7875],'KPIT':[40.4915,-80.2329],'KBNA':[36.1245,-86.6782],
+  'KMEM':[35.0424,-89.9767],'KSTL':[38.7487,-90.37],'KMSY':[29.9934,-90.258],
+  'KABQ':[35.0402,-106.609],'KFLL':[26.0726,-80.1527],'KJAX':[30.4941,-81.6879],
+  'KBUF':[42.9405,-78.7322],'KCLE':[41.4117,-81.8498],'KCMH':[39.998,-82.8919],
+  'KIND':[39.7173,-86.2944],'KMKE':[42.9472,-87.8966],'KMDW':[41.7868,-87.7524],
+  'KMCI':[39.2976,-94.7139],'KCOS':[38.8058,-104.7007],'KOKC':[35.3931,-97.6007],
+  'KOAK':[37.7213,-122.2208],'KSJC':[37.3626,-121.929],'KSMF':[38.6954,-121.5908],
+  'KTUL':[36.1984,-95.8881],'KLIT':[34.7294,-92.2243],'KBHM':[33.5629,-86.7535],
+  'KCHS':[32.8986,-80.0405],'KSAV':[32.1276,-81.2021],'KRNO':[39.4991,-119.7681],
+  'KBUR':[34.2007,-118.3585],'KELP':[31.8072,-106.3779],'KJAC':[43.6073,-110.7377],
+  // ── Europe ──
+  'EGLL':[51.4775,-0.4614],'EGKK':[51.1481,-0.1903],'LFPG':[49.0097,2.5478],
+  'EDDF':[50.0333,8.5706],'EHAM':[52.3086,4.7639],'LEMD':[40.4936,-3.5668],
+  'LIRF':[41.8003,12.2389],'LSZH':[47.4647,8.5492],'LEBL':[41.2971,2.0785],
+  'LOWW':[48.1103,16.5697],'EPWA':[52.1657,20.9671],'EDDM':[48.3537,11.775],
+  'ENGM':[60.1939,11.1004],'EKCH':[55.618,12.656],'ESSA':[59.6519,17.9186],
+  'EFHK':[60.3183,24.963],'EIDW':[53.4213,-6.27],'EGCC':[53.3537,-2.275],
+  'EGPF':[55.8719,-4.4331],'LIMC':[45.6306,8.7281],'LPPT':[38.7756,-9.1354],
+  'LGAV':[37.9364,23.9445],'LCLK':[34.8751,33.6249],'LFLL':[45.7256,5.0811],
+  'LFMN':[43.6584,7.2159],'LEBB':[43.3011,-2.9106],'LEVX':[42.2318,-8.6277],
+  // ── Middle East ──
+  'OMDB':[25.2528,55.3644],'OTHH':[25.2731,51.6081],'OERK':[24.9576,46.6988],
+  'OMAA':[24.433,54.6511],'OJAM':[31.7226,35.9919],'OLBA':[33.8209,35.4886],
+  'LLBG':[32.0055,34.8854],'OKBK':[29.2266,47.9689],'OOMS':[23.5933,58.2844],
+  'OBBI':[26.2708,50.6336],'HECA':[30.1219,31.4056],
+  // ── Asia ──
+  'VHHH':[22.308,113.9185],'RJTT':[35.5494,139.7798],'RJAA':[35.7647,140.3864],
+  'RKSI':[37.4691,126.451],'WSSS':[1.3644,103.9915],'VIDP':[28.5562,77.1],
+  'VABB':[19.0896,72.8656],'ZBAA':[40.0799,116.6031],'ZSPD':[31.1443,121.8083],
+  'VTBS':[13.6811,100.747],'WMKK':[2.7456,101.7099],'RPLL':[14.5086,121.0197],
+  'VOMM':[12.99,80.1693],'VOBL':[13.1979,77.7063],'VECC':[22.6547,88.4467],
+  // ── Oceania ──
+  'NZAA':[-37.0082,174.785],'YSSY':[-33.9461,151.1772],'YMML':[-37.6733,144.8433],
+  'YBBN':[-27.3842,153.1175],
+  // ── Americas ──
+  'CYYZ':[43.6772,-79.6306],'CYVR':[49.1967,-123.1815],'CYUL':[45.4706,-73.7408],
+  'MMMX':[19.4363,-99.0721],'SBGR':[-23.4356,-46.4731],'SCEL':[-33.393,-70.7858],
+  'SAEZ':[-34.8222,-58.5358],'SKBO':[4.7016,-74.1469],
+  // ── Africa ──
+  'FACT':[-33.9715,18.6021],'FAOR':[-26.1392,28.246],'DNMM':[6.5774,3.3214],
+  'HAAB':[8.9779,38.7993],'HTDA':[-6.8781,39.2026],
+};
+
+// Great circle arc between two lat/lon points → array of [lat,lon] points
+function greatCirclePoints(lat1, lon1, lat2, lon2, n = 120) {
+  const R = Math.PI / 180;
+  const φ1 = lat1*R, λ1 = lon1*R, φ2 = lat2*R, λ2 = lon2*R;
+  const d = 2 * Math.asin(Math.sqrt(
+    Math.sin((φ2-φ1)/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin((λ2-λ1)/2)**2
+  ));
+  if (d === 0) return [[lat1,lon1]];
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    const A = Math.sin((1-f)*d)/Math.sin(d), B = Math.sin(f*d)/Math.sin(d);
+    const x = A*Math.cos(φ1)*Math.cos(λ1) + B*Math.cos(φ2)*Math.cos(λ2);
+    const y = A*Math.cos(φ1)*Math.sin(λ1) + B*Math.cos(φ2)*Math.sin(λ2);
+    const z = A*Math.sin(φ1) + B*Math.sin(φ2);
+    pts.push([Math.atan2(z, Math.sqrt(x*x+y*y))/R, Math.atan2(y,x)/R]);
+  }
+  return pts;
+}
+
+function renderMap(dep, dest, pireps) {
+  if (_map) { _map.remove(); _map = null; }
+
+  _map = L.map('routeMap', { zoomControl: true, scrollWheelZoom: false, attributionControl: true });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">Carto</a>',
+    subdomains: 'abcd', maxZoom: 12
+  }).addTo(_map);
+
+  const bounds = L.latLngBounds();
+  const depC = AIRPORT_COORDS[dep], destC = AIRPORT_COORDS[dest];
+
+  if (depC && destC) {
+    // Great circle arc (dashed blue line)
+    const arc = greatCirclePoints(...depC, ...destC);
+    L.polyline(arc, { color: '#4da6ff', weight: 2.5, opacity: 0.85, dashArray: '8 5' }).addTo(_map);
+
+    // Airport markers
+    const mkIcon = (emoji) => L.divIcon({
+      html: `<span class="map-airport-icon">${emoji}</span>`,
+      className: '', iconSize: [28,28], iconAnchor: [14,20]
+    });
+    L.marker(depC, { icon: mkIcon('🛫') }).bindPopup(`<b>${dep}</b>`).addTo(_map);
+    L.marker(destC, { icon: mkIcon('🛬') }).bindPopup(`<b>${dest}</b>`).addTo(_map);
+    bounds.extend(depC); bounds.extend(destC);
+  }
+
+  // PIREP dots
+  pireps.forEach(p => {
+    if (p.lat == null || p.lon == null) return;
+    const lvlIdx = worstOfPirep(p);
+    const lvl = lvlIdx >= 0 ? LEVELS[lvlIdx] : null;
+    const color = lvl?.dot || '#888888';
+    const circle = L.circleMarker([p.lat, p.lon], {
+      radius: 7, fillColor: color, color: '#000', weight: 1, opacity: 1, fillOpacity: 0.9
+    });
+    circle.bindPopup(
+      `<b>${p.acType || 'Aircraft'}</b><br>` +
+      `${lvl ? `<span style="color:${color}">${lvl.name}</span>` : 'Unknown'} turbulence<br>` +
+      `${altStr(p) ? altStr(p) + '<br>' : ''}` +
+      `${timeAgo(p.obsTime)}`
+    );
+    circle.addTo(_map);
+    bounds.extend([p.lat, p.lon]);
+  });
+
+  if (bounds.isValid()) _map.fitBounds(bounds, { padding: [44, 44] });
+  else if (depC) _map.setView(depC, 4);
 }
 
 /* ─────────────────────────────────────────────────

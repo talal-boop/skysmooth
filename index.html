@@ -1044,14 +1044,21 @@ async function checkTurbulence() {
       .filter(p => worstOfPirep(p) >= 0)
       .sort((a, b) => worstOfPirep(b) - worstOfPirep(a));
 
-    // Badge level: last 60 min, highest level with ≥ 2 reports
-    // Single outlier reports don't drive the badge when there are many others
-    const ONE_HOUR = 60 * 60 * 1000;
-    const recentTurbPireps = turbPireps.filter(p => {
-      const d = typeof p.obsTime === 'number' ? new Date(p.obsTime * 1000) : new Date(p.obsTime);
-      return (Date.now() - d) < ONE_HOUR;
-    });
-    const badgePireps = recentTurbPireps.length > 0 ? recentTurbPireps : turbPireps;
+    // Badge level: tiered time windows — prefer fresh data over old data
+    // 1st try: last 30 min  (most current conditions)
+    // 2nd try: last 60 min  (if not enough fresh reports)
+    // 3rd try: all reports  (sparse / quiet routes)
+    // Within the chosen window: use highest level with ≥ 2 reports
+    // A single outlier at a higher level doesn't override the majority
+    function filterByAge(pireps, ms) {
+      return pireps.filter(p => {
+        const d = typeof p.obsTime === 'number' ? new Date(p.obsTime * 1000) : new Date(p.obsTime);
+        return (Date.now() - d) < ms;
+      });
+    }
+    let badgePireps = filterByAge(turbPireps, 30 * 60 * 1000);
+    if (badgePireps.length < 3) badgePireps = filterByAge(turbPireps, 60 * 60 * 1000);
+    if (badgePireps.length < 3) badgePireps = turbPireps;
 
     // Count how many reports at each level
     const lvlCounts = new Array(5).fill(0);

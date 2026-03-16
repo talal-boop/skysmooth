@@ -910,9 +910,16 @@ async function checkTurbulence() {
       .filter(p => worstOfPirep(p) >= 0)
       .sort((a, b) => worstOfPirep(b) - worstOfPirep(a));
 
-    // Worst overall level
-    const worst = turbPireps.length > 0
-      ? Math.max(...turbPireps.map(worstOfPirep))
+    // Worst level from reports in the last 60 minutes only (for the badge)
+    const ONE_HOUR = 60 * 60 * 1000;
+    const recentTurbPireps = turbPireps.filter(p => {
+      const d = typeof p.obsTime === 'number' ? new Date(p.obsTime * 1000) : new Date(p.obsTime);
+      return (Date.now() - d) < ONE_HOUR;
+    });
+    // Fall back to all reports if nothing recent
+    const badgePireps = recentTurbPireps.length > 0 ? recentTurbPireps : turbPireps;
+    const worst = badgePireps.length > 0
+      ? Math.max(...badgePireps.map(worstOfPirep))
       : -1;
 
     // Filter turbulence SIGMETs

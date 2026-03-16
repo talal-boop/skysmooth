@@ -1013,7 +1013,7 @@ async function fetchJSON(directUrl) {
 
 async function fetchPireps(icao) {
   // 'id' (singular) is the correct NOAA API v2 parameter name
-  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=3`);
+  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=1`);
 }
 
 async function fetchSigmets() {
@@ -1191,7 +1191,7 @@ function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
     <div class="route-meta">
       <strong>${dep} → ${dest}</strong>
       &nbsp;·&nbsp; <strong>${turbCount}</strong> PIREP${turbCount!==1?'s':''}
-      &nbsp;·&nbsp; last 60 min · 300 nm radius
+      &nbsp;·&nbsp; last hour · 300 nm radius
     </div>`;
 }
 
@@ -1201,7 +1201,7 @@ function renderPireps(pireps) {
     `${pireps.length} report${pireps.length!==1?'s':''}`;
 
   if (!pireps.length) {
-    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last 3 hours.</div>`;
+    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last hour.</div>`;
     return;
   }
 

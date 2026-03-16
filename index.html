@@ -983,10 +983,8 @@ function doFetch(url, ms = 12000) {
   }).finally(() => clearTimeout(tid));
 }
 
-async function fetchJSON(directUrl) {
-  // Attempt 1 — direct with very short timeout.
-  // In Chrome/Firefox this usually succeeds within 1-3s.
-  // In Safari from localhost CORS blocks it near-instantly, so 2s wastes minimal time.
+async function fetchJSON(directUrl, _retry = false) {
+  // Attempt 1 — direct (fast in Chrome/Firefox, instant-fail in Safari due to CORS)
   try {
     const r = await doFetch(directUrl, 2000);
     if (r.ok) {
@@ -994,18 +992,27 @@ async function fetchJSON(directUrl) {
       const d = await r.json();
       return Array.isArray(d) ? d : [];
     }
-  } catch (_) { /* CORS/network blocked — fall through to proxy */ }
+  } catch (_) { /* CORS/network — fall through to proxy */ }
 
-  // Attempt 2 — local Python proxy (same-origin, works in all browsers including Safari).
-  // 25s gives NOAA plenty of time even on slow days.
+  // Attempt 2 — cloud proxy
   let r2;
   try {
     r2 = await doFetch(toProxyUrl(directUrl), 25000);
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('Request timed out. Check your internet connection.');
-    throw new Error(`Both direct and proxy requests failed — check your internet connection.`);
+    if (e.name === 'AbortError') throw new Error('Request timed out — please try again.');
+    throw new Error('Could not reach the server — check your internet connection.');
   }
-  if (!r2.ok) throw new Error(`NOAA API returned HTTP ${r2.status}`);
+
+  // Auto-retry once on 504 (NOAA or proxy temporarily unavailable)
+  if (r2.status === 504 || r2.status === 502) {
+    if (!_retry) {
+      await new Promise(res => setTimeout(res, 2000)); // wait 2s then retry
+      return fetchJSON(directUrl, true);
+    }
+    throw new Error('NOAA servers are temporarily busy — please try again in a moment.');
+  }
+
+  if (!r2.ok) throw new Error(`NOAA returned an error (${r2.status}) — please try again.`);
   if (r2.status === 204) return [];
   const d2 = await r2.json();
   return Array.isArray(d2) ? d2 : [];

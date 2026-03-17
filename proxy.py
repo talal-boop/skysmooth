@@ -83,8 +83,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         print(f'[proxy] target -> {url}', file=sys.stderr, flush=True)
 
-        if not url.startswith('https://aviationweather.gov/'):
-            self.send_error(403, 'Only aviationweather.gov URLs are allowed')
+        ALLOWED = ('https://aviationweather.gov/', 'https://opensky-network.org/')
+        if not any(url.startswith(h) for h in ALLOWED):
+            self.send_error(403, 'URL not allowed')
             return
 
         try:

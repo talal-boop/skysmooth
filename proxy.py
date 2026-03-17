@@ -47,6 +47,67 @@ HEADERS = {
 }
 
 
+# IATA → ICAO airline callsign prefix mapping (for flight number lookup)
+AIRLINE_ICAO = {
+    'EK':'UAE','QR':'QTR','BA':'BAW','AA':'AAL','UA':'UAL','DL':'DAL',
+    'LH':'DLH','AF':'AFR','KL':'KLM','TK':'THY','EY':'ETD','SQ':'SIA',
+    'CX':'CPA','NH':'ANA','JL':'JAL','KE':'KAL','IB':'IBE','LX':'SWR',
+    'OS':'AUA','SK':'SAS','AY':'FIN','TP':'TAP','EI':'EIN','VS':'VIR',
+    'AC':'ACA','QF':'QFA','NZ':'ANZ','MH':'MAS','TG':'THA','CA':'CCA',
+    'MU':'CES','CZ':'CSN','AI':'AIC','ET':'ETH','MS':'MSR','WY':'OMA',
+    'GF':'GFA','FZ':'FDB','WS':'WJA','PR':'PAL','GA':'GIA','CI':'CAL',
+    'BR':'EVA','HU':'CHH','SA':'SAA','KQ':'KQA','RJ':'RJA','ME':'MEA',
+    'TL':'ANO','VN':'HVN','OZ':'AAR','FM':'CSH','ZH':'CSZ',
+}
+
+import re as _re
+import json as _json
+
+def _lookup_flight(raw_num):
+    """
+    Query OpenSky for a flight number like 'EK001' or 'QR1'.
+    Returns (dep_icao, dest_icao) or raises ValueError if not found.
+    Uses an 18-second timeout — longer than the 5s client-side timeout.
+    """
+    s = raw_num.upper().replace(' ', '').replace('-', '')
+    m = _re.match(r'^([A-Z]{2,3})0*(\d{1,4})$', s)
+    if not m:
+        raise ValueError('invalid flight number format')
+
+    iata, num = m.group(1), int(m.group(2))
+    icao = AIRLINE_ICAO.get(iata, iata)
+
+    candidates = [
+        f'{icao}{num}',
+        f'{icao}{str(num).zfill(4)}',
+        f'{iata}{num}',
+        f'{iata}{str(num).zfill(4)}',
+    ]
+    # Deduplicate while preserving order
+    seen = set()
+    candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+
+    for cs in candidates:
+        try:
+            url = f'/api/routes?callsign={cs}'
+            conn = http.client.HTTPSConnection('opensky-network.org', timeout=18, context=SSL_CTX)
+            conn.request('GET', url, headers={**HEADERS, 'Host': 'opensky-network.org'})
+            resp = conn.getresponse()
+            body = resp.read()
+            conn.close()
+            print(f'[flight] callsign={cs} status={resp.status}', file=sys.stderr, flush=True)
+            if resp.status == 200:
+                data = _json.loads(body)
+                route = data.get('route', [])
+                if len(route) >= 2:
+                    return route[0], route[-1]
+        except Exception as e:
+            print(f'[flight] callsign={cs} error={e}', file=sys.stderr, flush=True)
+            continue
+
+    raise ValueError('flight not found in OpenSky')
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f'[proxy] {fmt % args}', file=sys.stderr, flush=True)
@@ -65,6 +126,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/proxy':
             self._proxy(parsed.query)
+        elif parsed.path == '/flight':
+            self._flight(parsed.query)
         elif parsed.path in ('/', '/health'):
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain')
@@ -73,6 +136,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b'SkySmooth proxy OK')
         else:
             self.send_error(404)
+
+    def _flight(self, raw_query):
+        params = urllib.parse.parse_qs(raw_query)
+        num = params.get('num', [None])[0]
+        if not num:
+            self.send_error(400, 'Missing num parameter')
+            return
+        try:
+            dep, dest = _lookup_flight(num)
+            payload = _json.dumps({'dep': dep, 'dest': dest}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self._cors()
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+            self.wfile.write(payload)
+        except ValueError as e:
+            self.send_error(404, str(e))
+        except Exception as e:
+            print(f'[flight] ERROR -> {e}', file=sys.stderr, flush=True)
+            self.send_error(502, str(e))
 
     def _proxy(self, raw_query):
         url = ''

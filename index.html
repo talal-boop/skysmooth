@@ -1224,45 +1224,37 @@ async function searchByFlight() {
   const iata = m[1], num = parseInt(m[2]);
   const key  = `${iata}${num}`;
 
-  // Step 1 — instant static lookup (works even offline)
+  // Step 1 — live lookup via proxy /flight endpoint (18 s server-side timeout)
+  // This queries OpenSky with proper timeouts and returns authoritative data.
+  try {
+    const resp = await fetchWithTimeout(`${PROXY_BASE}/flight?num=${s}`, 22000);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.dep && data?.dest) {
+        document.getElementById('dep').value  = data.dep;
+        document.getElementById('dest').value = data.dest;
+        msg.className = 'flight-msg ok';
+        msg.textContent = `✓ ${raw.toUpperCase()}  →  ${data.dep} ✈ ${data.dest}`;
+        checkTurbulence();
+        return;
+      }
+    }
+  } catch(e) { /* server sleeping or network error — fall through to static DB */ }
+
+  // Step 2 — offline fallback: static database of common long-haul routes
+  // Used when the live lookup fails (e.g. proxy cold-starting on Render).
   if (KNOWN_ROUTES[key]) {
     const [dep, dest] = KNOWN_ROUTES[key];
     document.getElementById('dep').value  = dep;
     document.getElementById('dest').value = dest;
     msg.className = 'flight-msg ok';
-    msg.textContent = `✓ ${raw.toUpperCase()}  →  ${dep} ✈ ${dest}`;
+    msg.textContent = `✓ ${raw.toUpperCase()}  →  ${dep} ✈ ${dest}  (offline data)`;
     checkTurbulence();
     return;
   }
 
-  // Step 2 — live OpenSky lookup (8 s timeout, multiple callsign formats)
-  const icao = AIRLINE_ICAO[iata] || iata;
-  const candidates = [
-    `${icao}${num}`, `${icao}${String(num).padStart(4,'0')}`,
-    `${iata}${num}`, `${iata}${String(num).padStart(4,'0')}`,
-  ];
-
-  for (const cs of candidates) {
-    try {
-      const url  = `https://opensky-network.org/api/routes?callsign=${cs}`;
-      const resp = await fetchWithTimeout(toProxyUrl(url), 5000);
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      if (data?.route?.length >= 2) {
-        const dep  = data.route[0];
-        const dest = data.route[data.route.length - 1];
-        document.getElementById('dep').value  = dep;
-        document.getElementById('dest').value = dest;
-        msg.className = 'flight-msg ok';
-        msg.textContent = `✓ ${raw.toUpperCase()}  →  ${dep} ✈ ${dest}`;
-        checkTurbulence();
-        return;
-      }
-    } catch(e) { /* timeout or network error — try next format */ }
-  }
-
   msg.className = 'flight-msg err';
-  msg.textContent = `Flight not found — please enter airports manually`;
+  msg.textContent = 'Flight not found — please enter airports manually';
 }
 
 // Allow pressing Enter in the flight input

@@ -1237,10 +1237,13 @@ function computeTurbIndex(hourly, idx) {
   const modConv    = cape > 400 || li < -3;
 
   let level = 0;
-  if      (shear > 18 || convective)          level = 3; // severe
-  else if (shear > 10 || modConv || ws250 > 120) level = 2; // moderate
-  else if (shear > 5  || ws250 > 90)           level = 1; // light
-  else                                          level = 0; // smooth
+  // Severe: extreme shear in strong jet core, OR violent convection
+  if      ((shear > 22 && ws250 > 80) || cape > 2000 || li < -8)        level = 3;
+  // Moderate: significant shear OR very strong jet, OR active convection
+  else if (shear > 13 || ws250 > 115 || cape > 600 || li < -4)           level = 2;
+  // Light: jet present with some shear, OR mild convection
+  else if (shear > 7  || ws250 > 85  || cape > 200 || li < -1.5)         level = 1;
+  else                                                                     level = 0;
 
   return {
     level,
@@ -1512,7 +1515,7 @@ function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets,
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   // Render map after results are visible (Leaflet needs a visible container)
-  setTimeout(() => renderMap(dep, dest, turbPireps), 50);
+  setTimeout(() => renderMap(dep, dest, turbPireps, modelData || null), 50);
 }
 
 function renderRating(dep, dest, worst, outlier, turbCount, totalCount, modelData) {
@@ -1901,7 +1904,7 @@ async function addCloudLayer(map) {
   }
 }
 
-function renderMap(dep, dest, pireps) {
+function renderMap(dep, dest, pireps, modelData) {
   if (_map) { _map.remove(); _map = null; }
 
   _map = L.map('routeMap', { zoomControl: true, scrollWheelZoom: false, attributionControl: true });
@@ -1930,6 +1933,30 @@ function renderMap(dep, dest, pireps) {
     L.marker(depC, { icon: mkIcon('🛫') }).bindPopup(`<b>${dep}</b>`).addTo(_map);
     L.marker(destC, { icon: mkIcon('🛬') }).bindPopup(`<b>${dest}</b>`).addTo(_map);
     bounds.extend(depC); bounds.extend(destC);
+  }
+
+  // Model turbulence waypoint markers
+  if (modelData) {
+    const labels = ['DEP', '25%', 'MID', '75%', 'ARR'];
+    modelData.forEach((r, i) => {
+      if (!r) return;
+      const lvl = LEVELS[Math.min(r.level, 4)];
+      const color = lvl.dot;
+      const pulse = r.level >= 2 ? `box-shadow:0 0 10px ${color},0 0 20px ${color};` : '';
+      const icon = L.divIcon({
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.6);${pulse}"></div>`,
+        className: '', iconSize: [14, 14], iconAnchor: [7, 7]
+      });
+      L.marker([r.lat, r.lon], { icon })
+        .bindPopup(
+          `<b>${labels[i]} · ${lvl.name}</b><br>` +
+          `Jet stream: ${r.ws250} kt<br>` +
+          `Wind shear: ${r.shear} kt/km<br>` +
+          `CAPE: ${r.cape} J/kg · LI: ${r.li}<br>` +
+          `<span style="font-size:0.75em;color:#aaa">Atmospheric model data</span>`
+        )
+        .addTo(_map);
+    });
   }
 
   // PIREP dots

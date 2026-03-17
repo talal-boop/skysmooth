@@ -1388,36 +1388,22 @@ function greatCirclePoints(lat1, lon1, lat2, lon2, n = 120) {
   return pts;
 }
 
-// Fetch latest RainViewer satellite/radar and add weather overlay
+// Fetch latest RainViewer radar and add precipitation overlay (global coverage)
 async function addCloudLayer(map) {
   try {
     const r = await fetch('https://api.rainviewer.com/public/weather-maps.json');
     if (!r.ok) throw new Error('API ' + r.status);
     const data = await r.json();
     const host = data.host || 'https://tilecache.rainviewer.com';
-
-    // 1. Try satellite infrared — maxNativeZoom stops "Zoom Level Not Supported" tiles
-    const satFrames = data.satellite?.infrared;
-    if (satFrames?.length) {
-      const ts = satFrames[satFrames.length - 1].time;
-      L.tileLayer(
-        `${host}/v2/satellite/infrared/${ts}/256/{z}/{x}/{y}/0/0_1.png`,
-        { opacity: 0.65, tileSize: 256, maxNativeZoom: 3,
-          attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>' }
-      ).addTo(map);
-      return;
-    }
-
-    // 2. Fallback: radar precipitation
-    const radFrames = data.radar?.past;
-    if (radFrames?.length) {
-      const ts = radFrames[radFrames.length - 1].time;
-      L.tileLayer(
-        `${host}/v2/radar/${ts}/256/{z}/{x}/{y}/2/1_1.png`,
-        { opacity: 0.5, tileSize: 256, maxNativeZoom: 8,
-          attribution: '🌧️ <a href="https://rainviewer.com">RainViewer</a>' }
-      ).addTo(map);
-    }
+    // Radar tiles have global coverage — satellite infrared is Americas-only
+    const frames = data.radar?.past;
+    if (!frames?.length) return;
+    const ts = frames[frames.length - 1].time;
+    L.tileLayer(
+      `${host}/v2/radar/${ts}/256/{z}/{x}/{y}/6/1_1.png`,
+      { opacity: 0.45, tileSize: 256, maxNativeZoom: 8,
+        attribution: '🌧️ <a href="https://rainviewer.com">RainViewer</a>' }
+    ).addTo(map);
   } catch(e) {
     console.warn('Weather overlay unavailable:', e);
   }

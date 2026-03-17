@@ -1093,23 +1093,12 @@ async function fetchJSON(directUrl, _retry = false) {
 }
 
 async function fetchPireps(icao) {
-  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=1`);
+  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=2`);
 }
 
-// Fetch PIREPs along the full route using a bounding box.
-// Much better for international routes where NOAA has sparse airport-centric data.
+// Fetch PIREPs for departure and destination airports.
+// NOAA's bbox endpoint returns empty results — individual id+distance queries are reliable.
 async function fetchPirepsForRoute(dep, dest) {
-  const depC = AIRPORT_COORDS[dep], destC = AIRPORT_COORDS[dest];
-  if (depC && destC) {
-    const pad = 4;
-    const minLat = Math.max(-90,  Math.min(depC[0], destC[0]) - pad).toFixed(2);
-    const maxLat = Math.min(90,   Math.max(depC[0], destC[0]) + pad).toFixed(2);
-    const minLon = Math.max(-180, Math.min(depC[1], destC[1]) - pad).toFixed(2);
-    const maxLon = Math.min(180,  Math.max(depC[1], destC[1]) + pad).toFixed(2);
-    // NOAA bbox format: minLon,minLat,maxLon,maxLat (longitude first)
-    return fetchJSON(`https://aviationweather.gov/api/data/pirep?bbox=${minLon},${minLat},${maxLon},${maxLat}&format=json&age=1`);
-  }
-  // Fallback: individual airport queries
   const [a, b] = await Promise.all([fetchPireps(dep), fetchPireps(dest)]);
   return [...a, ...b];
 }
@@ -1339,7 +1328,7 @@ function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
         <div class="nd">
           No recent PIREPs with turbulence data near <strong>${dep}</strong> or <strong>${dest}</strong>.<br>
           This may indicate calm conditions, or reporting is sparse in this area.<br>
-          <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · within 300 nm of each airport</span>
+          <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · 300 nm radius · last 2 hrs</span>
         </div>
       </div>`;
     return;
@@ -1358,7 +1347,7 @@ function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
     <div class="route-meta">
       <strong>${dep} → ${dest}</strong>
       &nbsp;·&nbsp; <strong>${turbCount}</strong> PIREP${turbCount!==1?'s':''}
-      &nbsp;·&nbsp; last hour · 300 nm radius
+      &nbsp;·&nbsp; last 2 hrs · 300 nm radius
     </div>`;
 }
 
@@ -1368,7 +1357,7 @@ function renderPireps(pireps) {
     `${pireps.length} report${pireps.length!==1?'s':''}`;
 
   if (!pireps.length) {
-    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last hour.</div>`;
+    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last 2 hours.</div>`;
     return;
   }
 

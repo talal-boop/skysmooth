@@ -1160,6 +1160,44 @@ const AIRLINE_ICAO = {
   'TL':'ANO','VN':'HVN','OZ':'AAR','FM':'CSH','ZH':'CSZ'
 };
 
+// Static fallback for common long-haul flights (instant, works offline)
+const KNOWN_ROUTES = {
+  'EK1':['OMDB','EGLL'],'EK2':['EGLL','OMDB'],'EK3':['OMDB','EGLL'],'EK4':['EGLL','OMDB'],
+  'EK5':['OMDB','KJFK'],'EK6':['KJFK','OMDB'],'EK19':['OMDB','KJFK'],'EK20':['KJFK','OMDB'],
+  'EK21':['OMDB','KORD'],'EK22':['KORD','OMDB'],'EK201':['OMDB','LFPG'],'EK202':['LFPG','OMDB'],
+  'EK203':['OMDB','LFPG'],'EK204':['LFPG','OMDB'],'EK401':['OMDB','LEMD'],'EK402':['LEMD','OMDB'],
+  'EK31':['OMDB','EGLL'],'EK32':['EGLL','OMDB'],'EK35':['OMDB','EGLL'],'EK36':['EGLL','OMDB'],
+  'QR1':['OTHH','EGLL'],'QR2':['EGLL','OTHH'],'QR3':['OTHH','LFPG'],'QR4':['LFPG','OTHH'],
+  'QR5':['OTHH','LFPG'],'QR6':['LFPG','OTHH'],'QR701':['OTHH','KJFK'],'QR702':['KJFK','OTHH'],
+  'QR703':['OTHH','KJFK'],'QR704':['KJFK','OTHH'],'QR7':['OTHH','LEMD'],'QR8':['LEMD','OTHH'],
+  'BA1':['EGLL','KJFK'],'BA2':['KJFK','EGLL'],'BA101':['EGLL','KJFK'],'BA102':['KJFK','EGLL'],
+  'BA111':['EGLL','KJFK'],'BA112':['KJFK','EGLL'],'BA113':['EGLL','KJFK'],'BA114':['KJFK','EGLL'],
+  'BA175':['EGLL','KJFK'],'BA177':['EGLL','KJFK'],'BA179':['EGLL','KJFK'],
+  'BA253':['EGLL','OMDB'],'BA254':['OMDB','EGLL'],'BA255':['EGLL','OMDB'],'BA256':['OMDB','EGLL'],
+  'BA107':['EGLL','KLAX'],'BA269':['EGLL','KDFW'],'BA221':['EGLL','KBOS'],'BA209':['EGLL','KIAD'],
+  'AA100':['KJFK','EGLL'],'AA101':['EGLL','KJFK'],'AA106':['KLAX','EGLL'],'AA107':['EGLL','KLAX'],
+  'UA901':['KEWR','EGLL'],'UA930':['EGLL','KEWR'],'UA57':['KEWR','EGLL'],'UA58':['EGLL','KEWR'],
+  'DL1':['KJFK','EGLL'],'DL2':['EGLL','KJFK'],'DL401':['KJFK','LFPG'],'DL402':['LFPG','KJFK'],
+  'LH400':['EDDF','KJFK'],'LH401':['KJFK','EDDF'],'LH454':['EDDF','KLAX'],'LH455':['KLAX','EDDF'],
+  'AF11':['KJFK','LFPG'],'AF12':['LFPG','KJFK'],'AF83':['LFPG','KLAX'],'AF84':['KLAX','LFPG'],
+  'KL641':['EHAM','KJFK'],'KL642':['KJFK','EHAM'],'KL601':['EHAM','KLAX'],'KL602':['KLAX','EHAM'],
+  'TK1':['LTFM','KJFK'],'TK2':['KJFK','LTFM'],'TK21':['LTFM','LFPG'],'TK22':['LFPG','LTFM'],
+  'TK77':['LTFM','OMDB'],'TK78':['OMDB','LTFM'],'TK79':['LTFM','OMDB'],'TK80':['OMDB','LTFM'],
+  'EY1':['OMAA','EGLL'],'EY2':['EGLL','OMAA'],'EY3':['OMAA','EGLL'],'EY4':['EGLL','OMAA'],
+  'EY101':['OMAA','KJFK'],'EY102':['KJFK','OMAA'],'EY19':['OMAA','LFPG'],'EY20':['LFPG','OMAA'],
+  'SQ317':['WSSS','EGLL'],'SQ318':['EGLL','WSSS'],'SQ321':['WSSS','EGLL'],'SQ322':['EGLL','WSSS'],
+  'CX250':['VHHH','EGLL'],'CX251':['EGLL','VHHH'],'CX880':['VHHH','KJFK'],'CX881':['KJFK','VHHH'],
+  'VS3':['EGLL','KJFK'],'VS4':['KJFK','EGLL'],'VS25':['EGLL','KLAX'],'VS26':['KLAX','EGLL'],
+};
+
+// fetch with hard timeout (aborts after ms milliseconds)
+function fetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal, cache: 'no-cache' })
+    .finally(() => clearTimeout(tid));
+}
+
 async function searchByFlight() {
   const raw = document.getElementById('flightNumInput').value.trim();
   const msg = document.getElementById('flightMsg');
@@ -1177,19 +1215,30 @@ async function searchByFlight() {
   }
 
   const iata = m[1], num = parseInt(m[2]);
-  const icao = AIRLINE_ICAO[iata] || iata;
+  const key  = `${iata}${num}`;
 
+  // Step 1 — instant static lookup (works even offline)
+  if (KNOWN_ROUTES[key]) {
+    const [dep, dest] = KNOWN_ROUTES[key];
+    document.getElementById('dep').value  = dep;
+    document.getElementById('dest').value = dest;
+    msg.className = 'flight-msg ok';
+    msg.textContent = `✓ ${raw.toUpperCase()}  →  ${dep} ✈ ${dest}`;
+    checkTurbulence();
+    return;
+  }
+
+  // Step 2 — live OpenSky lookup (8 s timeout, multiple callsign formats)
+  const icao = AIRLINE_ICAO[iata] || iata;
   const candidates = [
-    `${icao}${num}`,
-    `${icao}${String(num).padStart(4,'0')}`,
-    `${iata}${num}`,
-    `${iata}${String(num).padStart(4,'0')}`,
+    `${icao}${num}`, `${icao}${String(num).padStart(4,'0')}`,
+    `${iata}${num}`, `${iata}${String(num).padStart(4,'0')}`,
   ];
 
   for (const cs of candidates) {
     try {
-      const url = `https://opensky-network.org/api/routes?callsign=${cs}`;
-      const resp = await fetch(toProxyUrl(url), { cache: 'no-cache' });
+      const url  = `https://opensky-network.org/api/routes?callsign=${cs}`;
+      const resp = await fetchWithTimeout(toProxyUrl(url), 8000);
       if (!resp.ok) continue;
       const data = await resp.json();
       if (data?.route?.length >= 2) {
@@ -1202,11 +1251,11 @@ async function searchByFlight() {
         checkTurbulence();
         return;
       }
-    } catch(e) { /* try next */ }
+    } catch(e) { /* timeout or network error — try next format */ }
   }
 
   msg.className = 'flight-msg err';
-  msg.textContent = `✈️ Flight not found — please enter airports manually`;
+  msg.textContent = `Flight not found — please enter airports manually`;
 }
 
 // Allow pressing Enter in the flight input

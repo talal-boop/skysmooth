@@ -1395,24 +1395,26 @@ async function addCloudLayer(map) {
     const data = await r.json();
     const host = data.host || 'https://tilecache.rainviewer.com';
 
-    // 1. Try satellite infrared — use .time field directly (most reliable URL form)
+    // 1. Try satellite infrared — maxNativeZoom stops "Zoom Level Not Supported" tiles
     const satFrames = data.satellite?.infrared;
     if (satFrames?.length) {
       const ts = satFrames[satFrames.length - 1].time;
       L.tileLayer(
         `${host}/v2/satellite/infrared/${ts}/256/{z}/{x}/{y}/0/0_1.png`,
-        { opacity: 0.65, tileSize: 256, attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>' }
+        { opacity: 0.65, tileSize: 256, maxNativeZoom: 6,
+          attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>' }
       ).addTo(map);
       return;
     }
 
-    // 2. Fallback: radar precipitation (shows weather-bearing clouds in colour)
+    // 2. Fallback: radar precipitation
     const radFrames = data.radar?.past;
     if (radFrames?.length) {
       const ts = radFrames[radFrames.length - 1].time;
       L.tileLayer(
         `${host}/v2/radar/${ts}/256/{z}/{x}/{y}/2/1_1.png`,
-        { opacity: 0.5, tileSize: 256, attribution: '🌧️ <a href="https://rainviewer.com">RainViewer</a>' }
+        { opacity: 0.5, tileSize: 256, maxNativeZoom: 8,
+          attribution: '🌧️ <a href="https://rainviewer.com">RainViewer</a>' }
       ).addTo(map);
     }
   } catch(e) {

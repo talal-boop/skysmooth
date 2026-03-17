@@ -1163,7 +1163,7 @@ async function fetchJSON(directUrl, _retry = false) {
 }
 
 async function fetchPireps(icao) {
-  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=108&format=json&age=2`); // 108 nm ≈ 200 km
+  return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=108&format=json&age=1`); // 108 nm ≈ 200 km, age=1hr
 }
 
 // Fetch PIREPs for departure and destination airports.
@@ -1545,7 +1545,7 @@ function renderRating(dep, dest, worst, outlier, turbCount, totalCount, modelDat
           <div class="nd">
             No recent PIREPs with turbulence data near <strong>${dep}</strong> or <strong>${dest}</strong>.<br>
             This may indicate calm conditions, or reporting is sparse in this area.<br>
-            <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · 200 km radius · last 2 hrs</span>
+            <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · 200 km radius · last 60 min</span>
           </div>
         </div>`;
     }
@@ -1565,7 +1565,7 @@ function renderRating(dep, dest, worst, outlier, turbCount, totalCount, modelDat
     <div class="route-meta">
       <strong>${dep} → ${dest}</strong>
       &nbsp;·&nbsp; <strong>${turbCount}</strong> PIREP${turbCount!==1?'s':''}
-      &nbsp;·&nbsp; last 2 hrs · 200 km radius
+      &nbsp;·&nbsp; last 60 min · 200 km radius
     </div>`;
 }
 
@@ -1575,7 +1575,7 @@ function renderPireps(pireps) {
     `${pireps.length} report${pireps.length!==1?'s':''}`;
 
   if (!pireps.length) {
-    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last 2 hours.</div>`;
+    list.innerHTML = `<div class="empty-state">No turbulence PIREPs found near this route in the last 60 minutes.</div>`;
     return;
   }
 

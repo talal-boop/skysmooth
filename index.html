@@ -1502,7 +1502,6 @@ async function checkTurbulence() {
 function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets, modelData) {
   renderRating(dep, dest, worst, outlier, turbPireps.length, totalPireps, modelData);
   renderPireps(turbPireps);
-  renderSigmets(turbSigmets);
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   // Render map after results are visible (Leaflet needs a visible container)

@@ -634,6 +634,18 @@
       padding: 22px;
     }
 
+    /* ── Model badge note (shown when PIREP data not available) ── */
+    .model-badge-note {
+      font-size: 0.78rem;
+      color: #7dd3fc;
+      margin: 8px auto 0;
+      max-width: 400px;
+      text-align: center;
+      padding: 6px 12px;
+      background: rgba(59,130,246,0.1);
+      border-radius: 20px;
+    }
+
     /* ── Model turbulence forecast ── */
     .model-note {
       font-size: 0.76rem;
@@ -1474,7 +1486,7 @@ async function checkTurbulence() {
 
     step('ps3','done');
 
-    render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets);
+    render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets, modelData);
     renderForecast(airmets);
     renderModelTurbulence(modelData, dep, dest);
 
@@ -1493,8 +1505,8 @@ async function checkTurbulence() {
 /* ─────────────────────────────────────────────────
    Rendering
 ───────────────────────────────────────────────── */
-function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets) {
-  renderRating(dep, dest, worst, outlier, turbPireps.length, totalPireps);
+function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets, modelData) {
+  renderRating(dep, dest, worst, outlier, turbPireps.length, totalPireps, modelData);
   renderPireps(turbPireps);
   renderSigmets(turbSigmets);
   document.getElementById('results').style.display = 'block';
@@ -1503,20 +1515,37 @@ function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets)
   setTimeout(() => renderMap(dep, dest, turbPireps), 50);
 }
 
-function renderRating(dep, dest, worst, outlier, turbCount, totalCount) {
+function renderRating(dep, dest, worst, outlier, turbCount, totalCount, modelData) {
   const wrap = document.getElementById('ratingWrap');
 
   if (worst < 0) {
-    wrap.innerHTML = `
-      <div class="badge-none">
-        <div class="ni">🔍</div>
-        <div class="nt">No Turbulence Reports Found</div>
-        <div class="nd">
-          No recent PIREPs with turbulence data near <strong>${dep}</strong> or <strong>${dest}</strong>.<br>
-          This may indicate calm conditions, or reporting is sparse in this area.<br>
-          <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · 300 nm radius · last 2 hrs</span>
+    // No PIREPs — try to fall back to model data for the badge
+    const modelWorst = modelData
+      ? Math.max(...modelData.filter(Boolean).map(r => r.level))
+      : -1;
+
+    if (modelWorst >= 1) {
+      // We have model-based turbulence — show it with a clear label
+      const lvl = LEVELS[modelWorst];
+      wrap.innerHTML = `
+        <div class="rating-badge ${lvl.cls}" style="opacity:0.9">
+          <div class="ri">${lvl.icon}</div>
+          <div class="rl">${lvl.name} Turbulence</div>
         </div>
-      </div>`;
+        <div class="model-badge-note">🌐 Model forecast — no pilot reports available for this region (NOAA coverage gap)</div>
+        <div class="route-meta"><strong>${dep} → ${dest}</strong> &nbsp;·&nbsp; See route forecast below</div>`;
+    } else {
+      wrap.innerHTML = `
+        <div class="badge-none">
+          <div class="ni">🔍</div>
+          <div class="nt">No Turbulence Reports Found</div>
+          <div class="nd">
+            No recent PIREPs with turbulence data near <strong>${dep}</strong> or <strong>${dest}</strong>.<br>
+            This may indicate calm conditions, or reporting is sparse in this area.<br>
+            <span style="font-size:0.78rem;opacity:0.6">${totalCount} total PIREP${totalCount!==1?'s':''} checked · 300 nm radius · last 2 hrs</span>
+          </div>
+        </div>`;
+    }
     return;
   }
 

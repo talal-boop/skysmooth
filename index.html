@@ -1267,7 +1267,7 @@ async function fetchModelTurbulence(dep, dest) {
     const times = results[0].hourly.time;
     let best = Infinity;
     times.forEach((t, i) => {
-      const diff = Math.abs(new Date(t).getTime() - now);
+      const diff = Math.abs(new Date(t + ':00Z').getTime() - now); // ':00Z' → valid ISO 8601 UTC, fixes Safari NaN bug
       if (diff < best) { best = diff; hourIdx = i; }
     });
   }

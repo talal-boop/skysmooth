@@ -965,10 +965,7 @@ function altStr(p) {
    through corsproxy.io, then fail with a clear message.
 ───────────────────────────────────────────────── */
 // Cloud proxy on Render — handles CORS for all browsers including Safari.
-// RENDER_PROXY_URL is replaced during deployment with the actual Render URL.
-const PROXY_BASE = window.location.hostname === 'localhost'
-  ? ''
-  : 'https://skysmooth-proxy.onrender.com';
+const PROXY_BASE = 'https://skysmooth-proxy.onrender.com';
 function toProxyUrl(directUrl) {
   return PROXY_BASE + '/proxy?url=' + encodeURIComponent(directUrl);
 }

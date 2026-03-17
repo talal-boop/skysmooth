@@ -634,6 +634,53 @@
       padding: 22px;
     }
 
+    /* ── Model turbulence forecast ── */
+    .model-note {
+      font-size: 0.76rem;
+      color: var(--text3);
+      margin-bottom: 14px;
+      padding: 7px 12px;
+      background: rgba(59,130,246,0.07);
+      border-left: 3px solid rgba(59,130,246,0.4);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .model-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .model-row:last-child { border-bottom: none; }
+
+    .model-label {
+      width: 82px;
+      font-size: 0.78rem;
+      color: var(--text3);
+      flex-shrink: 0;
+    }
+    .model-label strong { color: var(--text2); font-size: 0.8rem; }
+
+    .model-dot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 7px currentColor;
+    }
+
+    .model-lvl {
+      font-size: 0.82rem;
+      font-weight: 600;
+      min-width: 72px;
+    }
+
+    .model-detail {
+      font-size: 0.76rem;
+      color: var(--text3);
+      flex: 1;
+    }
+
     /* ── Legend ── */
     .legend {
       display: flex;
@@ -916,6 +963,17 @@
       <div id="forecastList"></div>
     </div>
 
+    <!-- Model-based global turbulence forecast -->
+    <div class="scard" id="modelWrap" style="display:none">
+      <div class="stitle">
+        <span class="stitle-icon">🌐</span>
+        Route Turbulence Forecast
+        <span class="stitle-count" id="modelCnt"></span>
+      </div>
+      <div class="model-note">Atmospheric model · Wind shear &amp; convective indices · Global coverage · Not pilot reports</div>
+      <div id="modelList"></div>
+    </div>
+
   </div><!-- /results -->
 
   <footer>
@@ -1105,10 +1163,136 @@ async function fetchPirepsForRoute(dep, dest) {
 
 async function fetchSigmets() {
   try {
-    return await fetchJSON('https://aviationweather.gov/api/data/airsigmet?format=json&type=sigmet');
+    // /isigmet gives global FIR coverage (Middle East, Asia, Africa, Oceania, etc.)
+    return await fetchJSON('https://aviationweather.gov/api/data/isigmet?format=json&hazard=turb');
   } catch (_) {
-    return []; // SIGMETs are supplementary — don't fail the whole check
+    return [];
   }
+}
+
+// ── Open-Meteo model turbulence (global coverage, no API key needed) ─────────
+
+// Interpolate n+1 points along the route (handles lon wrapping for Pacific routes)
+function routeWaypoints(dep, dest, n) {
+  const dc = AIRPORT_COORDS[dep], destC = AIRPORT_COORDS[dest];
+  if (!dc || !destC) return [];
+  const [lat1, lon1] = dc, [lat2, lon2] = destC;
+  let dLon = lon2 - lon1;
+  if (dLon > 180) dLon -= 360;
+  if (dLon < -180) dLon += 360;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    let lon = lon1 + dLon * t;
+    if (lon > 180) lon -= 360;
+    if (lon < -180) lon += 360;
+    pts.push([parseFloat((lat1 + (lat2 - lat1) * t).toFixed(2)), parseFloat(lon.toFixed(2))]);
+  }
+  return pts;
+}
+
+async function fetchOpenMeteo(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + `&hourly=wind_speed_200hPa,wind_speed_250hPa,wind_speed_300hPa`
+    + `,wind_direction_200hPa,wind_direction_250hPa,wind_direction_300hPa`
+    + `,geopotential_height_200hPa,geopotential_height_300hPa,cape,lifted_index`
+    + `&wind_speed_unit=kn&timezone=UTC&forecast_days=1&models=best_match`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Open-Meteo ' + r.status);
+  return r.json();
+}
+
+function computeTurbIndex(hourly, idx) {
+  const ws200 = hourly.wind_speed_200hPa?.[idx] || 0;
+  const ws300 = hourly.wind_speed_300hPa?.[idx] || 0;
+  const wd200 = (hourly.wind_direction_200hPa?.[idx] || 0) * Math.PI / 180;
+  const wd300 = (hourly.wind_direction_300hPa?.[idx] || 0) * Math.PI / 180;
+  const z200  = hourly.geopotential_height_200hPa?.[idx] || 11800;
+  const z300  = hourly.geopotential_height_300hPa?.[idx] || 9200;
+  const cape  = hourly.cape?.[idx] || 0;
+  const li    = hourly.lifted_index?.[idx] ?? 10;
+  const ws250 = hourly.wind_speed_250hPa?.[idx] || 0;
+
+  // Vector wind shear between 200 and 300 hPa
+  const u200 = ws200 * Math.cos(wd200), v200 = ws200 * Math.sin(wd200);
+  const u300 = ws300 * Math.cos(wd300), v300 = ws300 * Math.sin(wd300);
+  const dV   = Math.sqrt((u200 - u300) ** 2 + (v200 - v300) ** 2); // kt
+  const dZ   = Math.max(z200 - z300, 1) / 1000;                     // km
+  const shear = dV / dZ; // kt / km
+
+  // Convective risk
+  const convective = cape > 1500 || li < -6;
+  const modConv    = cape > 400 || li < -3;
+
+  let level = 0;
+  if      (shear > 18 || convective)          level = 3; // severe
+  else if (shear > 10 || modConv || ws250 > 120) level = 2; // moderate
+  else if (shear > 5  || ws250 > 90)           level = 1; // light
+  else                                          level = 0; // smooth
+
+  return {
+    level,
+    shear: shear.toFixed(1),
+    ws250: Math.round(ws250),
+    cape:  Math.round(cape),
+    li:    li != null ? li.toFixed(1) : '—'
+  };
+}
+
+async function fetchModelTurbulence(dep, dest) {
+  const waypoints = routeWaypoints(dep, dest, 4); // 5 pts: 0%, 25%, 50%, 75%, 100%
+  if (!waypoints.length) return null;
+  const results = await Promise.all(
+    waypoints.map(([lat, lon]) => fetchOpenMeteo(lat, lon).catch(() => null))
+  );
+  // Find hour index closest to now
+  let hourIdx = 0;
+  if (results[0]?.hourly?.time) {
+    const now = Date.now();
+    const times = results[0].hourly.time;
+    let best = Infinity;
+    times.forEach((t, i) => {
+      const diff = Math.abs(new Date(t).getTime() - now);
+      if (diff < best) { best = diff; hourIdx = i; }
+    });
+  }
+  return waypoints.map(([lat, lon], i) => {
+    if (!results[i]) return null;
+    return { lat, lon, ...computeTurbIndex(results[i].hourly, hourIdx) };
+  });
+}
+
+function renderModelTurbulence(results, dep, dest) {
+  const wrap = document.getElementById('modelWrap');
+  const list = document.getElementById('modelList');
+  const cnt  = document.getElementById('modelCnt');
+
+  if (!results || results.every(r => !r)) { wrap.style.display = 'none'; return; }
+
+  const labels = [`${dep} (dep)`, '25% route', 'Mid-route', '75% route', `${dest} (arr)`];
+  const worstLevel = Math.max(...results.filter(Boolean).map(r => r.level));
+  cnt.textContent = worstLevel >= 2 ? LEVELS[worstLevel].name.toUpperCase()
+                  : worstLevel === 1 ? 'LIGHT' : 'SMOOTH';
+  cnt.style.color = worstLevel >= 2 ? LEVELS[worstLevel].dot : worstLevel === 1 ? '#4dafff' : '#00e676';
+
+  list.innerHTML = results.map((r, i) => {
+    if (!r) return '';
+    const lvl = LEVELS[Math.min(r.level, 4)] || LEVELS[0];
+    const detail = r.level >= 2
+      ? `Shear ${r.shear} kt/km · Jet ${r.ws250} kt · CAPE ${r.cape} J/kg`
+      : r.level === 1
+        ? `Shear ${r.shear} kt/km · Jet ${r.ws250} kt`
+        : `Jet ${r.ws250} kt · Shear ${r.shear} kt/km`;
+    return `
+      <div class="model-row">
+        <div class="model-label">${labels[i]}</div>
+        <div class="model-dot" style="background:${lvl.dot};color:${lvl.dot}"></div>
+        <div class="model-lvl" style="color:${lvl.dot}">${lvl.name}</div>
+        <div class="model-detail">${detail}</div>
+      </div>`;
+  }).join('');
+
+  wrap.style.display = 'block';
 }
 
 
@@ -1223,11 +1407,12 @@ async function checkTurbulence() {
     const allRoutePireps = await fetchPirepsForRoute(dep, dest);
     step('ps1','done');
 
-    // Fetch SIGMETs and AIRMETs
+    // Fetch SIGMETs, AIRMETs and model turbulence in parallel
     step('ps2','active');
-    const [allSigmets, airmets] = await Promise.all([
+    const [allSigmets, airmets, modelData] = await Promise.all([
       fetchSigmets(),
-      fetchAirmets()
+      fetchAirmets(),
+      fetchModelTurbulence(dep, dest).catch(() => null)
     ]);
     step('ps2','done');
 
@@ -1280,17 +1465,18 @@ async function checkTurbulence() {
       else if (outlier <= worst) outlier = -1; // outlier not higher than badge level
     }
 
-    // Filter turbulence SIGMETs
+    // isigmet endpoint already filters by hazard=turb, but keep safety check
     const turbSigmets = allSigmets.filter(s => {
-      const h = (s.hazard || '').toUpperCase();
-      const raw = (s.rawAirSigmet || '').toUpperCase();
-      return h.includes('TURB') || raw.includes('TURB');
+      const h = (s.hazard || s.hazardType || '').toUpperCase();
+      const raw = (s.rawAirSigmet || s.rawIsigmet || '').toUpperCase();
+      return h.includes('TURB') || raw.includes('TURB') || h === '';
     });
 
     step('ps3','done');
 
     render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets);
     renderForecast(airmets);
+    renderModelTurbulence(modelData, dep, dest);
 
   } catch (e) {
     showErr(`Could not fetch weather data: ${e.message}`);
@@ -1407,18 +1593,28 @@ function renderSigmets(sigmets) {
   }
 
   list.innerHTML = sigmets.map(s => {
-    const id  = s.id || s.isigmetId || s.airSigmetId || 'SIGMET';
-    const sev = s.severity ? ` · Severity: ${s.severity}` : '';
+    // Handle both /airsigmet and /isigmet field names
+    const firName = s.firName || s.firId || '';
+    const id  = s.icaoId || s.id || s.isigmetId || s.airSigmetId || 'SIGMET';
+    const qual = s.qualifier || s.severity || s.intensityCode || '';
+    const sevLabel = qual ? ` · ${qual}` : '';
     const vf  = s.validTimeFrom ? fmtUTC(s.validTimeFrom) : '';
     const vt  = s.validTimeTo   ? fmtUTC(s.validTimeTo)   : '';
-    const raw = s.rawAirSigmet || '';
+    const raw = s.rawAirSigmet || s.rawIsigmet || '';
+    // Altitude from base/top (isigmet uses ft, airsigmet uses FL)
+    const altStr = (s.base != null && s.top != null)
+      ? ` · FL${String(Math.round(s.base/100)).padStart(3,'0')}–FL${String(Math.round(s.top/100)).padStart(3,'0')}`
+      : '';
+    const sevColour = { 'SEV':'#ff4545','MOD':'#f5a623','LGT':'#4dff91','EXTREME':'#ff4545','SEVERE':'#ff4545','MODERATE':'#f5a623' };
+    const col = sevColour[qual?.toUpperCase()] || '#f5a623';
 
     return `
       <div class="sigmet-item">
         <div class="sig-hdr">
-          <span class="sig-id">⚠️ ${id}${sev}</span>
+          <span class="sig-id" style="color:${col}">⚠️ ${id}${sevLabel}${altStr}</span>
           ${vf ? `<span class="sig-valid">${vf} → ${vt}</span>` : ''}
         </div>
+        ${firName ? `<div class="sig-raw" style="color:var(--text3);font-size:0.78rem">${firName}</div>` : ''}
         ${raw ? `<div class="sig-raw">${raw}</div>` : ''}
       </div>`;
   }).join('');

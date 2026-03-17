@@ -1348,7 +1348,8 @@ const AIRPORT_COORDS = {
   'VHHH':[22.308,113.9185],'RJTT':[35.5494,139.7798],'RJAA':[35.7647,140.3864],
   'RKSI':[37.4691,126.451],'WSSS':[1.3644,103.9915],'VIDP':[28.5562,77.1],
   'VABB':[19.0896,72.8656],'ZBAA':[40.0799,116.6031],'ZSPD':[31.1443,121.8083],
-  'VTBS':[13.6811,100.747],'WMKK':[2.7456,101.7099],'RPLL':[14.5086,121.0197],
+  'VTBS':[13.6811,100.747],'VTBD':[13.9126,100.6067],'VTSP':[8.1132,98.316],
+  'WMKK':[2.7456,101.7099],'RPLL':[14.5086,121.0197],
   'VOMM':[12.99,80.1693],'VOBL':[13.1979,77.7063],'VECC':[22.6547,88.4467],
   // ── China ──
   'ZGGG':[23.3924,113.2988],'ZUUU':[30.5785,103.9478],'ZUCK':[29.7192,106.6417],
@@ -1401,7 +1402,7 @@ async function addCloudLayer(map) {
       const ts = satFrames[satFrames.length - 1].time;
       L.tileLayer(
         `${host}/v2/satellite/infrared/${ts}/256/{z}/{x}/{y}/0/0_1.png`,
-        { opacity: 0.65, tileSize: 256, maxNativeZoom: 6,
+        { opacity: 0.65, tileSize: 256, maxNativeZoom: 3,
           attribution: '☁️ <a href="https://rainviewer.com">RainViewer</a>' }
       ).addTo(map);
       return;

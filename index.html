@@ -1020,8 +1020,24 @@ async function fetchJSON(directUrl, _retry = false) {
 }
 
 async function fetchPireps(icao) {
-  // 'id' (singular) is the correct NOAA API v2 parameter name
   return fetchJSON(`https://aviationweather.gov/api/data/pirep?id=${icao}&distance=300&format=json&age=1`);
+}
+
+// Fetch PIREPs along the full route using a bounding box.
+// Much better for international routes where NOAA has sparse airport-centric data.
+async function fetchPirepsForRoute(dep, dest) {
+  const depC = AIRPORT_COORDS[dep], destC = AIRPORT_COORDS[dest];
+  if (depC && destC) {
+    const pad = 4;
+    const minLat = Math.max(-90,  Math.min(depC[0], destC[0]) - pad).toFixed(2);
+    const maxLat = Math.min(90,   Math.max(depC[0], destC[0]) + pad).toFixed(2);
+    const minLon = Math.max(-180, Math.min(depC[1], destC[1]) - pad).toFixed(2);
+    const maxLon = Math.min(180,  Math.max(depC[1], destC[1]) + pad).toFixed(2);
+    return fetchJSON(`https://aviationweather.gov/api/data/pirep?bbox=${minLat},${minLon},${maxLat},${maxLon}&format=json&age=1`);
+  }
+  // Fallback: individual airport queries
+  const [a, b] = await Promise.all([fetchPireps(dep), fetchPireps(dest)]);
+  return [...a, ...b];
 }
 
 async function fetchSigmets() {
@@ -1079,12 +1095,9 @@ async function checkTurbulence() {
   }, 10000);
 
   try {
-    // Fetch PIREPs for both airports in parallel
+    // Fetch PIREPs covering the full route bounding box
     step('ps1','active');
-    const [depPireps, destPireps] = await Promise.all([
-      fetchPireps(dep),
-      fetchPireps(dest)
-    ]);
+    const allRoutePireps = await fetchPirepsForRoute(dep, dest);
     step('ps1','done');
 
     // Fetch SIGMETs
@@ -1097,7 +1110,7 @@ async function checkTurbulence() {
     // Deduplicate PIREPs
     const seen = new Set();
     const allPireps = [];
-    for (const p of [...depPireps, ...destPireps]) {
+    for (const p of allRoutePireps) {
       const key = p.pirepId || (p.obsTime + (p.aircraftRef || '') + JSON.stringify(p.location));
       if (!seen.has(key)) { seen.add(key); allPireps.push(p); }
     }

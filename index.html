@@ -1173,8 +1173,14 @@ const KNOWN_ROUTES = {
   'BA1':['EGLL','KJFK'],'BA2':['KJFK','EGLL'],'BA101':['EGLL','KJFK'],'BA102':['KJFK','EGLL'],
   'BA111':['EGLL','KJFK'],'BA112':['KJFK','EGLL'],'BA113':['EGLL','KJFK'],'BA114':['KJFK','EGLL'],
   'BA175':['EGLL','KJFK'],'BA177':['EGLL','KJFK'],'BA179':['EGLL','KJFK'],
+  'BA105':['EGLL','KLAX'],'BA106':['KLAX','EGLL'],'BA107':['EGLL','KLAX'],'BA108':['KLAX','EGLL'],
+  'BA191':['EGLL','OKBK'],'BA192':['OKBK','EGLL'],'BA193':['EGLL','OBBI'],'BA194':['OBBI','EGLL'],
+  'BA195':['EGLL','OMAA'],'BA196':['OMAA','EGLL'],'BA197':['EGLL','OMAA'],'BA198':['OMAA','EGLL'],
+  'BA207':['EGLL','OMDB'],'BA208':['OMDB','EGLL'],'BA209':['EGLL','KIAD'],'BA210':['KIAD','EGLL'],
+  'BA217':['EGLL','OTHH'],'BA218':['OTHH','EGLL'],'BA221':['EGLL','KBOS'],'BA222':['KBOS','EGLL'],
   'BA253':['EGLL','OMDB'],'BA254':['OMDB','EGLL'],'BA255':['EGLL','OMDB'],'BA256':['OMDB','EGLL'],
-  'BA107':['EGLL','KLAX'],'BA269':['EGLL','KDFW'],'BA221':['EGLL','KBOS'],'BA209':['EGLL','KIAD'],
+  'BA257':['EGLL','OMDB'],'BA258':['OMDB','EGLL'],'BA269':['EGLL','KDFW'],'BA270':['KDFW','EGLL'],
+  'BA281':['EGLL','YSSY'],'BA282':['YSSY','EGLL'],'BA289':['EGLL','VHHH'],'BA290':['VHHH','EGLL'],
   'AA100':['KJFK','EGLL'],'AA101':['EGLL','KJFK'],'AA106':['KLAX','EGLL'],'AA107':['EGLL','KLAX'],
   'UA901':['KEWR','EGLL'],'UA930':['EGLL','KEWR'],'UA57':['KEWR','EGLL'],'UA58':['EGLL','KEWR'],
   'DL1':['KJFK','EGLL'],'DL2':['EGLL','KJFK'],'DL401':['KJFK','LFPG'],'DL402':['LFPG','KJFK'],
@@ -1238,7 +1244,7 @@ async function searchByFlight() {
   for (const cs of candidates) {
     try {
       const url  = `https://opensky-network.org/api/routes?callsign=${cs}`;
-      const resp = await fetchWithTimeout(toProxyUrl(url), 8000);
+      const resp = await fetchWithTimeout(toProxyUrl(url), 5000);
       if (!resp.ok) continue;
       const data = await resp.json();
       if (data?.route?.length >= 2) {

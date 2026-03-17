@@ -63,17 +63,180 @@ AIRLINE_ICAO = {
 import re as _re
 import json as _json
 
+# IATA airport code → ICAO airport code (for converting FR24 results)
+AIRPORT_IATA_TO_ICAO = {
+    # North America
+    'JFK':'KJFK','LAX':'KLAX','ORD':'KORD','DFW':'KDFW','ATL':'KATL','SFO':'KSFO',
+    'MIA':'KMIA','BOS':'KBOS','IAD':'KIAD','EWR':'KEWR','IAH':'KIAH','DEN':'KDEN',
+    'SEA':'KSEA','LAS':'KLAS','MCO':'KMCO','CLT':'KCLT','MSP':'KMSP','DTW':'KDTW',
+    'PHX':'KPHX','PHL':'KPHL','SAN':'KSAN','TPA':'KTPA','PDX':'KPDX','HNL':'PHNL',
+    'YYZ':'CYYZ','YVR':'CYVR','YUL':'CYUL','YYC':'CYYC','YEG':'CYEG',
+    # UK & Ireland
+    'LHR':'EGLL','LGW':'EGKK','MAN':'EGCC','EDI':'EGPH','BHX':'EGBB',
+    'LCY':'EGLC','STN':'EGSS','LTN':'EGGW','BRS':'EGGD','GLA':'EGPF',
+    'DUB':'EIDW','SNN':'EINN','ORK':'EICK',
+    # France
+    'CDG':'LFPG','ORY':'LFPO','NCE':'LFMN','LYS':'LFLL','MRS':'LFML','BOD':'LFBD',
+    # Germany
+    'FRA':'EDDF','MUC':'EDDM','DUS':'EDDL','HAM':'EDDH','BER':'EDDB','STR':'EDDS','CGN':'EDDK',
+    # Netherlands, Belgium, Switzerland
+    'AMS':'EHAM','BRU':'EBBR','ZRH':'LSZH','GVA':'LSGG','BSL':'LFSB',
+    # Spain & Portugal
+    'MAD':'LEMD','BCN':'LEBL','PMI':'LEPA','AGP':'LEMG','VLC':'LEVC','SVQ':'LEZL',
+    'LIS':'LPPT','OPO':'LPPR','FAO':'LPFR',
+    # Italy
+    'FCO':'LIRF','MXP':'LIMC','LIN':'LIML','BGY':'LIME','NAP':'LIRN','VCE':'LIPZ',
+    'BLQ':'LIPE','CTA':'LICC','PMO':'LICJ','FLR':'LIRQ',
+    # Scandinavia & Finland
+    'CPH':'EKCH','ARN':'ESSA','GOT':'ESGG','OSL':'ENGM','BGO':'ENBR','TRD':'ENVA',
+    'HEL':'EFHK','RVN':'EFRO',
+    # Eastern Europe
+    'VIE':'LOWW','PRG':'LKPR','BUD':'LHBP','WAW':'EPWA','KRK':'EPKK',
+    'BEG':'LYBE','SOF':'LBSF','OTP':'LROP','SKP':'LWSK','ZAG':'LDZA',
+    'LJU':'LJLJ','SJJ':'LQSA',
+    # Greece & Cyprus
+    'ATH':'LGAV','SKG':'LGTS','HER':'LGIR','RHO':'LGRP','LCA':'LCLK','PFO':'LCPH',
+    # Turkey
+    'IST':'LTFM','SAW':'LTBS','ADB':'LTBJ','ESB':'LTAC','AYT':'LTAI','ADA':'LTAF',
+    # Russia
+    'SVO':'UUEE','DME':'UUDD','VKO':'UUWW','LED':'ULLI','SVX':'USSS','OVB':'UNNT',
+    # Middle East
+    'DXB':'OMDB','DWC':'OMDW','AUH':'OMAA','SHJ':'OMSJ',
+    'DOH':'OTHH',
+    'RUH':'OERK','JED':'OEJN','DMM':'OEDF','MED':'OEMA','ABH':'OEBA',
+    'BAH':'OBBI',
+    'KWI':'OKBK',
+    'BEY':'OLBA',
+    'AMM':'OJAI','AQJ':'OJAQ',
+    'MCT':'OOMS','SLL':'OOSA',
+    'TLV':'LLBG',
+    'CAI':'HECA','HRG':'HEGN','SSH':'HESH','LXR':'HELX',
+    'ADD':'HAAB',
+    'BGW':'ORBI','BSR':'ORMM','EBL':'ORER',
+    # Africa
+    'JNB':'FAOR','CPT':'FACT','DUR':'FALE','PLZ':'FAPE',
+    'NBO':'HKJK','MBA':'HKMO',
+    'DAR':'HTDA','ZNZ':'HTZA',
+    'MRU':'FIMP',
+    'TNR':'FMMI',
+    'CMN':'GMMN','RAK':'GMMX','TNG':'GMTT','AGA':'GMAD',
+    'ALG':'DAAG','TUN':'DTTA','SFA':'DTTX',
+    'LOS':'DNMM','ABV':'DNAA','KAN':'DNKN',
+    'ACC':'DGAA',
+    'DKR':'GOBD',
+    'ROB':'GLRB',
+    'BJL':'GBYD',
+    # Asia — China
+    'PEK':'ZBAA','PKX':'ZBAD','PVG':'ZSPD','SHA':'ZSSS',
+    'CAN':'ZGGG','SZX':'ZGSZ','CTU':'ZUUU','CKG':'ZUCK',
+    'HGH':'ZSHC','WUH':'ZHHH','XIY':'ZLXY','CSX':'ZGHA',
+    'KMG':'ZPPP','TSN':'ZBYN','DLC':'ZYTL','TNA':'ZSJN',
+    'CGO':'ZHCC','NKG':'ZSNJ','HFE':'ZSOF','FOC':'ZSFZ',
+    'XMN':'ZSAM','HAK':'ZJHK','SYX':'ZJSY','URC':'ZWWW',
+    # Asia — Korea & Japan
+    'ICN':'RKSI','GMP':'RKSS','PUS':'RKPK','CJU':'RKPC',
+    'NRT':'RJAA','HND':'RJTT','KIX':'RJBB','NGO':'RJGG',
+    'CTS':'RJCC','FUK':'RJFF','OKA':'ROAH',
+    # Asia — Southeast
+    'SIN':'WSSS',
+    'KUL':'WMKK','PEN':'WMKP','LGK':'WMKL',
+    'BKK':'VTBS','DMK':'VTBD','HKT':'VTSP','CNX':'VTCC','USM':'VTSM',
+    'MNL':'RPLL','CEB':'RPVM','DVO':'RPMD',
+    'CGK':'WIII','DPS':'WADD','SUB':'WARR','JOG':'WARJ','UPG':'WAAA',
+    'SGN':'VVTS','HAN':'VVNB','DAD':'VVDN',
+    'RGN':'VYYY',
+    'PNH':'VDPP','REP':'VDSR',
+    'VTE':'VLVT',
+    # Asia — South
+    'BOM':'VABB','DEL':'VIDP','MAA':'VOMM','BLR':'VOBL','HYD':'VOHS',
+    'CCU':'VECC','COK':'VOCI','GOI':'VOGO','AMD':'VAAH','PNQ':'VAPO',
+    'TRV':'VOTV',
+    'CMB':'VCBI','MLE':'VRMM',
+    'DAC':'VGZR','CGP':'VGEG',
+    'KTM':'VNKT',
+    'KHI':'OPKC','ISB':'OPIS','LHE':'OPLA','PEW':'OPPS','SKT':'OPST',
+    'KBL':'OAKB',
+    # Asia — Central
+    'TAS':'UTTT','ALA':'UAAA','NQZ':'UACC',
+    'TBS':'UGTB','EVN':'UDYZ','GYD':'UBBB',
+    # Oceania
+    'SYD':'YSSY','MEL':'YMML','BNE':'YBBN','PER':'YPPH','ADL':'YPAD',
+    'CBR':'YSCB','OOL':'YBCG','HBA':'YMHB','DRW':'YPDN','CNS':'YBCS',
+    'AKL':'NZAA','CHC':'NZCH','WLG':'NZWN','ZQN':'NZQN',
+    'NAN':'NFFN','APW':'NSFA',
+    # South America
+    'GRU':'SBGR','GIG':'SBGL','BSB':'SBBR','FOR':'SBFZ','REC':'SBRF',
+    'SSA':'SBSV','POA':'SBPA','CWB':'SBCT','BEL':'SBBE','MAO':'SBEG',
+    'EZE':'SAEZ','AEP':'SABE','COR':'SAAC','MDZ':'SAME','TUC':'SANT',
+    'SCL':'SCEL','IPC':'SCIP',
+    'BOG':'SKBO','MDE':'SKRG','CLO':'SKCL','CTG':'SKCG',
+    'LIM':'SPJC',
+    'GYE':'SEGU','UIO':'SEQM',
+    'CCS':'SVMI',
+    'PTY':'MPTO',
+    'MGA':'MNMG',
+    'SJO':'MROC',
+    'GUA':'MGGT',
+    'HAV':'MUHA',
+    'SDQ':'MDSD','PUJ':'MDPC',
+    'MBJ':'MKJS','KIN':'MKJP',
+    'CUN':'MMUN','MEX':'MMMX','GDL':'MMGL','MTY':'MMMY','TIJ':'MMTJ',
+}
+
+# Try importing FlightRadar24 (installed via requirements.txt on Render)
+try:
+    from FlightRadar24 import FlightRadar24API as _FR24API
+    _fr24 = _FR24API()
+    _FR24_AVAILABLE = True
+    print('[flight] FlightRadar24 API loaded', file=sys.stderr, flush=True)
+except Exception as _e:
+    _FR24_AVAILABLE = False
+    print(f'[flight] FlightRadar24 not available: {_e}', file=sys.stderr, flush=True)
+
+
+def _lookup_flight_fr24(flight_num):
+    """
+    Look up a flight route via FlightRadar24 live data.
+    Returns (dep_icao, dest_icao) ICAO codes, or raises ValueError.
+    Only works for flights that are currently airborne or recently flew.
+    """
+    if not _FR24_AVAILABLE:
+        raise ValueError('FR24 not available')
+
+    result = _fr24.search(flight_num)
+    live = result.get('live', [])
+
+    for item in live:
+        d = item.get('detail', {})
+        dep_iata  = d.get('schd_from') or d.get('orig_iata')
+        dest_iata = d.get('schd_to')   or d.get('dest_iata')
+        if dep_iata and dest_iata:
+            dep_icao  = AIRPORT_IATA_TO_ICAO.get(dep_iata.upper())
+            dest_icao = AIRPORT_IATA_TO_ICAO.get(dest_iata.upper())
+            if dep_icao and dest_icao:
+                print(f'[flight] FR24 live: {dep_iata}->{dest_iata} ({dep_icao}->{dest_icao})', file=sys.stderr, flush=True)
+                return dep_icao, dest_icao
+
+    raise ValueError('not found in FR24 live data')
+
+
 def _lookup_flight(raw_num):
     """
-    Query OpenSky for a flight number like 'EK001' or 'QR1'.
-    Returns (dep_icao, dest_icao) or raises ValueError if not found.
-    Uses an 18-second timeout — longer than the 5s client-side timeout.
+    Look up a flight route. Tries FR24 live data first, then OpenSky.
+    Returns (dep_icao, dest_icao) or raises ValueError.
     """
     s = raw_num.upper().replace(' ', '').replace('-', '')
     m = _re.match(r'^([A-Z]{2,3})0*(\d{1,4})$', s)
     if not m:
         raise ValueError('invalid flight number format')
 
+    # ── Step 1: FlightRadar24 live lookup ───────────────────────────────
+    try:
+        return _lookup_flight_fr24(s)
+    except Exception as e:
+        print(f'[flight] FR24 miss ({e}), trying OpenSky', file=sys.stderr, flush=True)
+
+    # ── Step 2: OpenSky route database ─────────────────────────────────
     iata, num = m.group(1), int(m.group(2))
     icao = AIRLINE_ICAO.get(iata, iata)
 
@@ -83,7 +246,6 @@ def _lookup_flight(raw_num):
         f'{iata}{num}',
         f'{iata}{str(num).zfill(4)}',
     ]
-    # Deduplicate while preserving order
     seen = set()
     candidates = [c for c in candidates if not (c in seen or seen.add(c))]
 
@@ -95,17 +257,17 @@ def _lookup_flight(raw_num):
             resp = conn.getresponse()
             body = resp.read()
             conn.close()
-            print(f'[flight] callsign={cs} status={resp.status}', file=sys.stderr, flush=True)
+            print(f'[flight] OpenSky callsign={cs} status={resp.status}', file=sys.stderr, flush=True)
             if resp.status == 200:
                 data = _json.loads(body)
                 route = data.get('route', [])
                 if len(route) >= 2:
                     return route[0], route[-1]
         except Exception as e:
-            print(f'[flight] callsign={cs} error={e}', file=sys.stderr, flush=True)
+            print(f'[flight] OpenSky {cs} error={e}', file=sys.stderr, flush=True)
             continue
 
-    raise ValueError('flight not found in OpenSky')
+    raise ValueError('flight not found')
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

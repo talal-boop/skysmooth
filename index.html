@@ -1033,7 +1033,8 @@ async function fetchPirepsForRoute(dep, dest) {
     const maxLat = Math.min(90,   Math.max(depC[0], destC[0]) + pad).toFixed(2);
     const minLon = Math.max(-180, Math.min(depC[1], destC[1]) - pad).toFixed(2);
     const maxLon = Math.min(180,  Math.max(depC[1], destC[1]) + pad).toFixed(2);
-    return fetchJSON(`https://aviationweather.gov/api/data/pirep?bbox=${minLat},${minLon},${maxLat},${maxLon}&format=json&age=1`);
+    // NOAA bbox format: minLon,minLat,maxLon,maxLat (longitude first)
+    return fetchJSON(`https://aviationweather.gov/api/data/pirep?bbox=${minLon},${minLat},${maxLon},${maxLat}&format=json&age=1`);
   }
   // Fallback: individual airport queries
   const [a, b] = await Promise.all([fetchPireps(dep), fetchPireps(dest)]);

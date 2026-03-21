@@ -1156,12 +1156,18 @@ async function fetchJSON(directUrl, _retry = false) {
     }
   } catch (_) { /* CORS/network — fall through to proxy */ }
 
-  // Attempt 2 — cloud proxy
+  // Attempt 2 — cloud proxy (90s timeout to survive Render cold-start)
   let r2;
   try {
-    r2 = await doFetch(toProxyUrl(directUrl), 55000);
+    r2 = await doFetch(toProxyUrl(directUrl), 90000);
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('Request timed out — the server may be waking up. Please try again.');
+    if (e.name === 'AbortError') {
+      // Proxy timed out — auto-retry once with a fresh 90s window
+      if (!_retry) {
+        return fetchJSON(directUrl, true);
+      }
+      throw new Error('Server is taking too long to wake up. Please wait 30 seconds and try again.');
+    }
     throw new Error('Could not reach the server — check your internet connection.');
   }
 
@@ -1463,10 +1469,10 @@ async function checkTurbulence() {
   step('ps1','active'); step('ps2',''); step('ps3','');
   document.getElementById('ps4').textContent = '';
 
-  // Show hint if taking >10s (proxy waking from sleep)
+  // Show hint if taking >8s (proxy waking from sleep on Render free tier)
   const slowHint = setTimeout(() => {
-    document.getElementById('ps4').textContent = '⏳ Server waking up, this can take ~30s on first use…';
-  }, 10000);
+    document.getElementById('ps4').textContent = '⏳ Server waking up — this takes ~30–60s on first use. Hang tight…';
+  }, 8000);
 
   try {
     // Fetch PIREPs covering the full route bounding box

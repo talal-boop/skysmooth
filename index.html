@@ -1535,19 +1535,6 @@ async function checkTurbulence() {
       return h.includes('TURB') || raw.includes('TURB') || h === '';
     });
 
-    // Incorporate active SIGMET severity into the badge
-    if (turbSigmets.length > 0) {
-      const sigmetWorst = turbSigmets.reduce((acc, s) => {
-        const q = (s.qualifier || s.severity || s.intensityCode || '').toUpperCase();
-        const lvl = q.includes('EXTR') ? 4
-                  : q.includes('SEV')  ? 3
-                  : q.includes('MOD')  ? 2
-                  : q.includes('LGT')  ? 1 : 2; // default MOD when qualifier unknown
-        return Math.max(acc, lvl);
-      }, 0);
-      worst = Math.max(worst, sigmetWorst);
-    }
-
     step('ps3','done');
 
     render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets, modelData);

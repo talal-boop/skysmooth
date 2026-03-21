@@ -151,8 +151,7 @@
       color: var(--text1);
       font-size: 1rem;
       font-weight: 600;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
+      letter-spacing: 0.3px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
@@ -203,14 +202,6 @@
     .ac-name { color: #e2e8f0; font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0; text-transform: none; font-weight: 400; }
     .ac-loc  { color: #64748b; font-size: 0.75rem; letter-spacing: 0; text-transform: none; }
 
-    .arrow {
-      font-size: 1.4rem;
-      color: var(--accent);
-      padding-bottom: 2px;
-      opacity: 0.6;
-      flex-shrink: 0;
-    }
-
     .btn-check {
       padding: 13px 30px;
       background: linear-gradient(135deg, #1a72d8 0%, #4da6ff 50%, #7b5fff 100%);
@@ -236,6 +227,30 @@
     .btn-check:hover  { transform: translateY(-3px) scale(1.03); box-shadow: 0 10px 32px rgba(77,166,255,0.55); }
     .btn-check:active { transform: translateY(0) scale(0.98); }
     .btn-check:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; animation: none; }
+
+    /* ── Swap button ── */
+    .swap-btn {
+      background: rgba(77,166,255,0.08);
+      border: 1px solid rgba(77,166,255,0.25);
+      border-radius: 50%;
+      color: var(--accent);
+      font-size: 1.1rem;
+      width: 36px; height: 36px;
+      min-width: 36px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s, border-color 0.2s, transform 0.3s;
+      padding: 0;
+      margin-bottom: 2px;
+      line-height: 1;
+    }
+    .swap-btn:hover {
+      background: rgba(77,166,255,0.2);
+      border-color: var(--accent);
+      transform: rotate(180deg);
+    }
+    .swap-btn:active { transform: rotate(180deg) scale(0.92); }
 
     /* ── Quick routes ── */
     .quick-routes {
@@ -853,7 +868,7 @@
     @media (max-width: 600px) {
       h1 { font-size: 2.2rem; }
       .inputs-row { flex-direction: column; gap: 10px; }
-      .arrow { transform: rotate(90deg); text-align: center; align-self: center; }
+      .swap-btn { align-self: center; transform: none !important; }
       .rating-badge { padding: 28px 28px; }
       .search-card { padding: 20px 16px 16px; }
     }
@@ -885,7 +900,7 @@
           <div class="ac-drop" id="dep-drop"></div>
         </div>
       </div>
-      <div class="arrow">→</div>
+      <button class="swap-btn" onclick="swapAirports()" title="Swap airports">⇅</button>
       <div class="input-grp">
         <label for="dest">Destination Airport</label>
         <div class="inp-wrap">
@@ -956,6 +971,15 @@
       <div class="pirep-list" id="pirepList"></div>
     </div>
 
+    <!-- SIGMETs -->
+    <div class="scard" id="sigmetWrap">
+      <div class="stitle">
+        <span class="stitle-icon">⚠️</span>
+        Active Turbulence SIGMETs
+        <span class="stitle-count" id="sigmetCnt"></span>
+      </div>
+      <div class="sigmet-list" id="sigmetList"></div>
+    </div>
 
     <!-- Turbulence Forecast (AIRMETs) -->
     <div id="forecastWrap" class="section-card" style="display:none">
@@ -980,6 +1004,9 @@
   </div><!-- /results -->
 
   <footer>
+    <div id="shareRow" style="display:none;margin-bottom:16px;">
+      <button class="flight-btn" id="shareBtn" onclick="shareRoute()">🔗 Copy shareable link</button>
+    </div>
     <div class="disclaimer">
       ⚠️ <span><strong>For informational use only.</strong> Always follow crew instructions and consult official FAA/NOAA sources before flight. Data sourced from NOAA Aviation Weather Center.</span>
     </div>
@@ -1364,9 +1391,41 @@ function renderForecast(airmets) {
 /* ─────────────────────────────────────────────────
    UI helpers
 ───────────────────────────────────────────────── */
+function airportDisplayName(icao) {
+  const a = AIRPORTS.find(x => x[0] === icao);
+  return a ? `${a[2]} · ${a[3]} (${icao})` : icao;
+}
+
 function go(dep, dest) {
-  document.getElementById('dep').value  = dep;
-  document.getElementById('dest').value = dest;
+  const depInput  = document.getElementById('dep');
+  const destInput = document.getElementById('dest');
+  depInput.value        = airportDisplayName(dep);
+  depInput.dataset.icao = dep;
+  destInput.value        = airportDisplayName(dest);
+  destInput.dataset.icao = dest;
+  checkTurbulence();
+}
+
+function swapAirports() {
+  const depInput  = document.getElementById('dep');
+  const destInput = document.getElementById('dest');
+  const tmpVal  = depInput.value,  tmpIcao  = depInput.dataset.icao  || '';
+  depInput.value        = destInput.value;
+  depInput.dataset.icao = destInput.dataset.icao || '';
+  destInput.value        = tmpVal;
+  destInput.dataset.icao = tmpIcao;
+}
+
+function shareRoute() {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('shareBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✅ Link copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    prompt('Copy this link:', url);
+  });
 }
 
 function showErr(msg) {
@@ -1388,8 +1447,10 @@ function step(id, state) {
    Main
 ───────────────────────────────────────────────── */
 async function checkTurbulence() {
-  const dep  = document.getElementById('dep').value.trim().toUpperCase();
-  const dest = document.getElementById('dest').value.trim().toUpperCase();
+  const depInput  = document.getElementById('dep');
+  const destInput = document.getElementById('dest');
+  const dep  = (depInput.dataset.icao  || depInput.value.trim()).toUpperCase();
+  const dest = (destInput.dataset.icao || destInput.value.trim()).toUpperCase();
 
   if (!dep || !dest) return showErr('Please select both departure and destination airports from the search dropdown.');
   if (!/^[A-Z0-9]{3,4}$/.test(dep) || !/^[A-Z0-9]{3,4}$/.test(dest))
@@ -1478,11 +1539,26 @@ async function checkTurbulence() {
       return h.includes('TURB') || raw.includes('TURB') || h === '';
     });
 
+    // Incorporate active SIGMET severity into the badge
+    if (turbSigmets.length > 0) {
+      const sigmetWorst = turbSigmets.reduce((acc, s) => {
+        const q = (s.qualifier || s.severity || s.intensityCode || '').toUpperCase();
+        const lvl = q.includes('EXTR') ? 4
+                  : q.includes('SEV')  ? 3
+                  : q.includes('MOD')  ? 2
+                  : q.includes('LGT')  ? 1 : 2; // default MOD when qualifier unknown
+        return Math.max(acc, lvl);
+      }, 0);
+      worst = Math.max(worst, sigmetWorst);
+    }
+
     step('ps3','done');
 
     render(dep, dest, worst, outlier, turbPireps, allPireps.length, turbSigmets, modelData);
     renderForecast(airmets);
     renderModelTurbulence(modelData, dep, dest);
+    history.replaceState(null, '', `?dep=${dep}&dest=${dest}`);
+    document.getElementById('shareRow').style.display = 'block';
 
   } catch (e) {
     showErr(`Could not fetch weather data: ${e.message}`);
@@ -1502,6 +1578,7 @@ async function checkTurbulence() {
 function render(dep, dest, worst, outlier, turbPireps, totalPireps, turbSigmets, modelData) {
   renderRating(dep, dest, worst, outlier, turbPireps.length, totalPireps, modelData);
   renderPireps(turbPireps);
+  renderSigmets(turbSigmets);
   document.getElementById('results').style.display = 'block';
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   // Render map after results are visible (Leaflet needs a visible container)
@@ -2463,6 +2540,7 @@ function setupAutocomplete(inputId, dropId) {
   const inp  = document.getElementById(inputId);
   const drop = document.getElementById(dropId);
   let focusedIdx = -1;
+  let debounceTimer = null;
 
   function closeDrop() { drop.classList.remove('open'); focusedIdx = -1; }
 
@@ -2473,17 +2551,18 @@ function setupAutocomplete(inputId, dropId) {
     items.forEach((el, i) => el.classList.toggle('focused', i === focusedIdx));
   }
 
-  function selectItem(icao) {
-    inp.value = icao;
+  function selectItem(icao, displayName) {
+    inp.value = displayName || icao;
+    inp.dataset.icao = icao;
     closeDrop();
   }
 
-  inp.addEventListener('input', () => {
+  function renderDrop() {
     const hits = searchAirports(inp.value);
     if (!hits.length) { closeDrop(); return; }
     focusedIdx = -1;
     drop.innerHTML = hits.map(a =>
-      `<div class="ac-item" data-icao="${a[0]}">` +
+      `<div class="ac-item" data-icao="${a[0]}" data-name="${a[2]} · ${a[3]} (${a[0]})">` +
         `<span class="ac-code">${a[0]}</span>` +
         `<span class="ac-iata">${a[1]}</span>` +
         `<div class="ac-info">` +
@@ -2493,9 +2572,18 @@ function setupAutocomplete(inputId, dropId) {
       `</div>`
     ).join('');
     drop.querySelectorAll('.ac-item').forEach(el => {
-      el.addEventListener('mousedown', e => { e.preventDefault(); selectItem(el.dataset.icao); });
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        selectItem(el.dataset.icao, el.dataset.name);
+      });
     });
     drop.classList.add('open');
+  }
+
+  inp.addEventListener('input', () => {
+    inp.dataset.icao = ''; // user is typing — clear any previously selected ICAO
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(renderDrop, 150);
   });
 
   inp.addEventListener('keydown', e => {
@@ -2505,7 +2593,7 @@ function setupAutocomplete(inputId, dropId) {
     else if (e.key === 'Escape')    { closeDrop(); }
     else if (e.key === 'Enter') {
       const focused = drop.querySelector('.ac-item.focused');
-      if (focused) { e.preventDefault(); e.stopPropagation(); selectItem(focused.dataset.icao); }
+      if (focused) { e.preventDefault(); e.stopPropagation(); selectItem(focused.dataset.icao, focused.dataset.name); }
     }
   });
 
@@ -2514,6 +2602,16 @@ function setupAutocomplete(inputId, dropId) {
 
 setupAutocomplete('dep',  'dep-drop');
 setupAutocomplete('dest', 'dest-drop');
+
+/* ─────────────────────────────────────────────────
+   Load route from URL on page load  (?dep=EGLL&dest=KJFK)
+───────────────────────────────────────────────── */
+(function () {
+  const p = new URLSearchParams(window.location.search);
+  const d = (p.get('dep')  || '').toUpperCase();
+  const t = (p.get('dest') || '').toUpperCase();
+  if (/^[A-Z0-9]{3,4}$/.test(d) && /^[A-Z0-9]{3,4}$/.test(t)) go(d, t);
+})();
 </script>
 </body>
 </html>
